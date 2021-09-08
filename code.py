@@ -24,10 +24,18 @@ def onClickWindow(arg):
     if window.focus_get().winfo_class() == "Entry" and textBox.get() == placeHolderText:
         textBox.delete(0,"end")
 
+def validateUsername(args):
+    if window.focus_get().winfo_class() == "Entry":
+        chosenUsername = textBox.get()
+        if len(chosenUsername) > 1:
+            if chosenUsername.isalpha():
+                textBox.destroy()
+                print("You've hit enter! " + chosenUsername)
+                window.unbind("<Return>")
+                #moveToMainWindow(chosenUsername)
 
 
 window.bind("<Button-1>",onClickWindow)
-
-
+window.bind("<Return>",validateUsername)
 
 window.mainloop()
