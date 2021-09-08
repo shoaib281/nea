@@ -2,16 +2,12 @@ import tkinter
 import tkinter.font
 
 window = tkinter.Tk()
-
 width, height = 700, 400
-
 window.update_idletasks()
-
 screenWidth, screenHeight = window.winfo_screenwidth(), window.winfo_screenheight()
-
 x,y = int(screenWidth/2 - width/2), int(screenHeight/2-height/2 - 100)
-
 window.geometry(f"{width}x{height}+{x}+{y}")
+
 placeHolderText = "Enter Username:"
 textBoxWidth = 32
 textBoxFont = tkinter.font.Font(size=14)
