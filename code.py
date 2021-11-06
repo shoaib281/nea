@@ -1,5 +1,7 @@
 import tkinter
 import tkinter.font
+import networkingClass
+import threading
 
 window = tkinter.Tk()
 width, height = 700, 400
@@ -28,8 +30,19 @@ def validateUsername(args):
                 textBox.destroy()
                 print("You've hit enter! " + chosenUsername)
                 window.unbind("<Return>")
-                #moveToMainWindow(chosenUsername)
+                window.networking = networkingClass.networkingClass(chosenUsername, window)
+                window.networking.selfBroadcast()
+                threading.Thread(target=window.networking.loop).start()
 
+def updateWindow(self,username):
+    frame = tkinter.Frame(window)
+    frame.pack()
+
+    label = tkinter.Label(frame,text = username)
+    label.pack()
+    print("boom")
+
+window.updateWindow = updateWindow
 
 window.bind("<Button-1>",onClickWindow)
 window.bind("<Return>",validateUsername)
