@@ -1,4 +1,5 @@
 import tkinter
+from tkinter.constants import BOTTOM, LEFT
 import tkinter.font
 import networkingClass
 import threading
@@ -30,19 +31,41 @@ def validateUsername(args):
                 textBox.destroy()
                 print("You've hit enter! " + chosenUsername)
                 window.unbind("<Return>")
+                window.frames = []
                 window.networking = networkingClass.networkingClass(chosenUsername, window)
                 window.networking.selfBroadcast()
                 threading.Thread(target=window.networking.loop).start()
 
-def updateWindow(self,username):
-    frame = tkinter.Frame(window)
-    frame.pack()
+def addUser(self,index):
+    frame = tkinter.Frame(window,width=width)
+    
+    frame.pack(fill="x")
 
-    label = tkinter.Label(frame,text = username)
-    label.pack()
-    print("boom")
+    
+    player = self.networking.playerDict[index]
 
-window.updateWindow = updateWindow
+    plrFrame = playerFrame(frame, player)
+
+    self.frames.append(plrFrame)
+
+
+
+class playerFrame():
+    def __init__(self,frame, player):
+        self.frame = frame
+        self.player = player
+
+        invite = tkinter.Button(self.frame, text="Invite", command=self.inviteCommand)
+        invite.pack(side="left")
+
+        label = tkinter.Label(self.frame,text = self.player["username"] + ":" + player["status"], font = textBoxFont)
+        label.pack()
+
+    def inviteCommand(self):        
+        print("jablow", self.player["username"])
+    
+
+window.addUser = addUser
 
 window.bind("<Button-1>",onClickWindow)
 window.bind("<Return>",validateUsername)

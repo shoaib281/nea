@@ -1,7 +1,6 @@
-from os import truncate, utime
 import socket
 import threading
-from tkinter.font import families
+import time
 
 class networkingClass():
     def __init__(self, username, window):
@@ -13,21 +12,25 @@ class networkingClass():
         self.broadcastTime = 1
         self.broadcastPort = 8734
 
-        self.invitePort = 8735
-        self.inviteSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.inviteSocket.bind(("", self.invitePort))
-        self.inviteSocket.listen()
-
         self.listeningBroadcastSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.listeningBroadcastSocket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        self.listeningBroadcastSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, socket.SO_BROADCAST)
         self.listeningBroadcastSocket.bind(("", self.broadcastPort))
+        
 
         self.playerDict = {}
+
+        self.timeToKill = 50
         
     def selfBroadcast(self):
         threading.Timer(self.broadcastTime, self.selfBroadcast,[]).start()
         
         self.broadcastSocket.sendto(bytes(self.username,"utf-8"),("<broadcast>",self.broadcastPort))
+
+    def checkKill(self, player):
+        playerTime = self.playerDict[player].time
+        if int(time.time()) < playerTime + self.timeToKill:
+            print("player should be dead")
+
 
     def newDataToDict(self, data):
         username, address = data
@@ -36,27 +39,25 @@ class networkingClass():
 
         print(username, ip, port)
 
-        index = username + ":"  + ip
-
-        
-
-        if not index in self.playerDict:
+        player = username + ":"  + ip
+        if not player in self.playerDict:
 
             playerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            playerSocket.connect((ip, self.invitePort))
+            #playerSocket.connect((ip, self.invitePort))
 
 
-            self.playerDict[index] = {
+            self.playerDict[player] = {
                 "address":  ip,
                 "username": username,
                 "port": port,
                 "status": "active",
                 "invitedMe": False,
                 "socketObject": playerSocket,
-                "invitedByMe": False
+                "invitedByMe": False,
+                "timeInvited": int(time.time())
             } 
 
-            self.window.updateWindow(self,username)
+            self.window.addUser(self.window, player)
         
 
     def loop(self):
