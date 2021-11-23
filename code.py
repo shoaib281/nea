@@ -1,8 +1,9 @@
 import tkinter
-from tkinter.constants import BOTTOM, LEFT
+from tkinter.constants import N, NW
 import tkinter.font
 import networkingClass
 import threading
+import launch
 
 window = tkinter.Tk()
 width, height = 700, 400
@@ -29,44 +30,96 @@ def validateUsername(args):
         if len(chosenUsername) > 1:
             if chosenUsername.isalpha():
                 textBox.destroy()
-                print("You've hit enter! " + chosenUsername)
+                window.title(chosenUsername)
                 window.unbind("<Return>")
+
+                print(chosenUsername)
+                
                 window.frames = []
                 window.networking = networkingClass.networkingClass(chosenUsername, window)
                 window.networking.selfBroadcast()
                 threading.Thread(target=window.networking.loop).start()
+                threading.Thread(target=window.networking.listeningLoop).start()
 
 def addUser(self,index):
-    frame = tkinter.Frame(window,width=width)
+    frame = tkinter.Frame(window,width=width, height=30)
     
-    frame.pack(fill="x")
+    frame.pack(fill="x", side="top")
 
-    
     player = self.networking.playerDict[index]
 
-    plrFrame = playerFrame(frame, player)
+    plrFrame = playerFrame(frame, self.frames, player, window)
+    plrFrame.addInviteButton()
 
     self.frames.append(plrFrame)
 
-
-
 class playerFrame():
-    def __init__(self,frame, player):
+    def __init__(self,frame, frames, player, window):
         self.frame = frame
+        self.frames = frames
         self.player = player
+        self.window = window
 
-        invite = tkinter.Button(self.frame, text="Invite", command=self.inviteCommand)
-        invite.pack(side="left")
+        self.label = tkinter.Label(self.frame,text = self.player["username"] + ":" + player["status"], font = textBoxFont)
+        self.label.place(relx = 0.5, anchor=N)
 
-        label = tkinter.Label(self.frame,text = self.player["username"] + ":" + player["status"], font = textBoxFont)
-        label.pack()
+    def removeInviteButton(self):
+        if self.inviteButton:
+            self.inviteButton.place_forget()
 
-    def inviteCommand(self):        
-        print("jablow", self.player["username"])
-    
+    def addInviteButton(self):
+        self.inviteButton = tkinter.Button(self.frame, text="Invite", command=self.inviteCommand)
+        self.inviteButton.place(relx=0, anchor=NW)
+
+
+    def inviteCommand(self): #client        
+        self.player["socketObject"].connect((self.player["address"], self.player["listeningPort"]))
+        threading.Thread(target=self.window.networking.listeningAcceptReject, args=(self.player["index"],self)).start()
+        self.removeInviteButton()
+
+    def addAcceptReject(self): #server
+        difference=25
+        self.acceptButton = tkinter.Button(self.frame, text="Accept", command=self.acceptInvite)
+        self.acceptButton.place(relx=0.9,x=-difference, anchor=N)
+
+        self.rejectButton = tkinter.Button(self.frame, text="Reject", command=self.rejectInvite)
+        self.rejectButton.place(relx=0.9,x = difference, anchor=N)
+
+        self.removeInviteButton()
+
+    def removeAcceptReject(self): 
+        if hasattr(self, "acceptButton"):
+            self.acceptButton.pack_forget()
+            self.acceptButton.destroy()
+
+            self.rejectButton.pack_forget()
+            self.rejectButton.destroy()
+
+    def rejectInvite(self): #server
+        connection = self.connection
+        connection.send(bytes("Reject", "utf-8"))
+        self.removeAcceptReject()
+        self.addInviteButton()
+        self.connection = False
+
+    def clearEverything(self):
+        for frame in self.frames:
+                    frame.removeAcceptReject()
+                    frame.removeInviteButton()
+
+    def acceptInvite(self): #server
+        connection = self.connection
+        connection.send(bytes("Accept","utf-8"))
+        self.connection = False
+        self.clearEverything()
+
+        launch.startGame()
+
+    def destroyFrame(self):
+        self.frame.pack_forget()
+        self.frame.destroy()
 
 window.addUser = addUser
-
 window.bind("<Button-1>",onClickWindow)
 window.bind("<Return>",validateUsername)
 
