@@ -29,6 +29,7 @@ local game = {
     height = 700, 
     width = 1000,
     title = "Clash",
+    side = false -- starts on the left
 }
 
 local gameStates = {
@@ -70,63 +71,78 @@ local loadouts = {
 local purchasableEntities = {
     {
         price = 10,
-        name = "shoaib"
+        name = "shoaib",
+        pathfind = "tower"
     },
     {
         price = 20,
-        name = "kant"
+        name = "kant",
+        pathfind = "tower"
     },
     {
         price = 30,
-        name = "leibniz"
+        name = "leibniz",
+        pathfind = "tower"
     },
     {
         price = 40,
-        name = "descartes"
+        name = "descartes",
+        pathfind = "tower"
     },
     {
         price = 50,
-        name = "nietszche"
+        name = "nietszche",
+        pathfind = "tower"
     },
     {
         price = 60,
-        name = "rousseau"
+        name = "rousseau",
+        pathfind = "tower"
     },
     {
         price = 70,
-        name = "sartre"
+        name = "sartre",
+        pathfind = "tower"
     },
     {
         price = 80,
-        name = "foccault"
+        name = "foccault",
+        pathfind = "tower"
     },
     {
         price = 90,
-        name = "schopen"
+        name = "schopen",
+        pathfind = "tower"
     },
     {
         price = 100,
-        name = "camus"
+        name = "camus",
+        pathfind = "tower"
     },
     {
         price = 110,
-        name = "voltaire"
+        name = "voltaire",
+        pathfind = "tower"
     },
     {
         price = 120,
-        name = "witttein"
+        name = "witttein",
+        pathfind = "tower"
     },
     {
         price = 130,
-        name = "locke"
+        name = "locke",
+        pathfind = "tower"
     },
     {
         price = 140,
-        name = "hegel"
+        name = "hegel",
+        pathfind = "tower"
     },
     {
         price = 150,
-        name = "aquinas"
+        name = "aquinas",
+        pathfind = "tower"
     }
 }
 
@@ -204,10 +220,13 @@ concord.component("gameEntity", function(sf, index, xLoc, yLoc)
     sf.yLoc = yLoc
 end)
 
+concord.component("team", function(sf, state)
+    sf.state = state
+end)
 concord.component("popupDescription")
 
 local gameSystem = concord.system({
-    gameEntities = {"gameEntity"}
+    gameEntities = {"gameEntity", "team"}
 })
 
 local drawUI = concord.system({
@@ -246,6 +265,41 @@ function gameSystem:init()
     end
 end
 
+local totalDt = 0
+
+function gameSystem:update(dt)
+    totalDt = totalDt + dt
+    if totalDt > .2 then
+        totalDt = 0
+        for _, baseGameEntity in ipairs(self.gameEntities) do
+
+            local pathfindMode = purchasableEntities[baseGameEntity.gameEntity.index].pathfind
+            local endNode = {1, tl.height/2}
+
+            if not baseGameEntity.team.state then
+                endNode[1] = tl.width     
+                print("hi?")
+            end
+
+            print(endNode[1], endNode[2])
+
+            if pathfindMode == "tower" then
+                local posX, posY = unpack(
+                    gameEntityMap:pathfind({baseGameEntity.gameEntity.xLoc, baseGameEntity.gameEntity.yLoc}, endNode))
+                
+                print("sososo", posX, posY, baseGameEntity.gameEntity.xLoc, baseGameEntity.gameEntity.yLoc)
+                
+                gameEntityMap[baseGameEntity.gameEntity.yLoc][baseGameEntity.gameEntity.xLoc] = nil
+                gameEntityMap[posY][posX] = baseGameEntity.gameEntity
+
+                baseGameEntity:give("gameEntity", baseGameEntity.gameEntity.index, posX, posY)
+                baseGameEntity.pos.x = (posX-1) * tl.size
+                baseGameEntity.pos.y = (posY-1) * tl.size
+            end
+        end
+    end
+end
+
 function buttonSystem:checkClick(x, y)
     for _, ent in ipairs(self.buttons) do
         button = ent.button
@@ -269,22 +323,13 @@ function buttonSystem:checkClick(x, y)
 
                     player.cash = player.cash - purchasableEntities[purchaseIndex].price
 
-                    placeEntity(purchaseIndex, posX, posY)
+                    placeEntity(purchaseIndex, posX, posY, game.side)
                 
                     readyToPlaceEntity:give("pos", 1200, 1200)
                 end
             end
         end
     end
-end
-
-function placeEntity(index, posX, posY)
-    print(purchasableEntities)
-    print(index, posX, posY, purchasableEntities[index], tl.size, tl.defaultImageSize)
-    local newEntity = concord.entity(world)
-    :give("gameEntity", index, posX, posY)
-    :give("drawable", "image", 5,{purchasableEntities[index].image, tl.size/tl.defaultImageSize})
-    :give("pos", (posX-1) * tl.size, (posY-1) * tl.size)
 end
 
 function buttonSystem:highlight(x,y)
@@ -318,7 +363,6 @@ function buttonSystem:highlight(x,y)
     end
 end
 
-
 function drawUI:draw()
     for i,layer in ipairs(layers) do
         for entity,_ in pairs(layer) do
@@ -330,7 +374,6 @@ function drawUI:draw()
                 love.graphics.draw(entity.drawable.canvas, entity.pos.x, entity.pos.y)
             elseif entity.drawable.type == "image" then
                 love.graphics.draw(entity.drawable.image, entity.pos.x + tl.xOffset, entity.pos.y, 0,entity.drawable.scale, entity.drawable.scale)
-                --love.graphics.draw()
             end
         end
     end
@@ -356,6 +399,106 @@ function tl:draw()
             love.graphics.setColor(cl.default)
         end
     end
+end
+
+function distanceAlgorithm(startNode, endNode)
+    return math.sqrt((endNode[2] - startNode[2])^2 + (startNode[1] - endNode[1])^2)
+end
+
+function gameEntityMap:pathfind(startNode, endNode)
+
+    local distance = distanceAlgorithm(startNode, endNode)
+
+    if distance == 0 then
+        print("shack?")
+        return {startNode[1], startNode[2]}
+    end
+    
+
+    -- 12,6 1,5
+    local temp = startNode
+    local startNode = endNode -- 1,5
+    local endNode  = temp -- 12,6
+
+    
+
+    local tempMap = {}
+    for i = 1,tl.height do
+        tempMap[i] = {}
+    end
+
+    tempMap[startNode[2]][startNode[1]] = {}
+    tempMap[startNode[2]][startNode[1]].gCost = 0
+    tempMap[startNode[2]][startNode[1]].hCost = distance
+    tempMap[startNode[2]][startNode[1]].fCost = distance
+
+    --print("hi", distance, endNode[1], endNode[2], startNode[1], startNode[2])
+
+    while true do
+        local bestNode -- x,y
+
+        for i = 1, tl.height do
+            for j = 1, tl.width do
+                if tempMap[i][j] and tempMap[i][j] ~= "closed" then
+                    if not bestNode then
+                        bestNode = {j,i, tempMap[i][j].fCost}
+                    elseif bestNode[3] > tempMap[i][j].fCost then
+                        bestNode = {j, i, tempMap[i][j].fCost}
+                    end
+                end
+            end
+        end
+        --print("yo?aaaaaaaa", bestNode[1], bestNode[2])
+        --print("bonsoir", tempMap[bestNode[2]][bestNode[1]].fCost, bestNode[2], bestNode[1])
+
+        tempMap[bestNode[2]][bestNode[1]] = "closed"
+
+        for a = 1,4 do
+            local i, j
+            
+            --[[
+            if a == 1 then 
+                i = -1
+                j = 0
+            elseif a == 2 then
+                i = 0
+                j = -1
+            elseif a == 3 then
+                i = 0
+                j = 1
+            else
+                i = 1
+                j = 0
+            end    
+            ]]--
+
+            i = -1+ math.floor(a / 2)
+            j = 1 - math.fmod(a,3)
+
+            if i+bestNode[2] >= 1 and i+bestNode[2] <= tl.height and j+bestNode[1] >= 1 and j+bestNode[1] <= tl.width then
+                if not tempMap[i+bestNode[2]][j+bestNode[1]] or tempMap[i+bestNode[2]][j+bestNode[1]] ~= "closed" then
+                    tempMap[i+bestNode[2]][j+bestNode[1]] = {}
+                    tempNode = tempMap[i+bestNode[2]][j+bestNode[1]]
+                    tempNode.gCost = distanceAlgorithm(startNode, {j+bestNode[1],i+bestNode[2]})
+                    tempNode.hCost = distanceAlgorithm(endNode,   {j+bestNode[1],i+bestNode[2]})
+                    tempNode.fCost = tempNode.hCost + tempNode.gCost
+
+                    if tempNode.hCost == 0 then
+                        return {bestNode[1], bestNode[2]}
+                    end
+                end
+            end
+        end
+    end
+end
+
+function placeEntity(index, posX, posY, side)
+    print("Placing entity at ", posX, posY)
+    local newEntity = concord.entity(world)
+    :give("gameEntity", index, posX, posY, side)
+    :give("drawable", "image", 5,{purchasableEntities[index].image, tl.size/tl.defaultImageSize})
+    :give("pos", (posX-1) * tl.size, (posY-1) * tl.size)
+    :give("team", side)
 end
 
 
@@ -475,12 +618,6 @@ end
 function love.load(args)
     local myIp, myPort, plrIp, plrPort = unpack(args)
 
-    --udp = socket.udp()
-    --udp:settimeout(0)
-    --udp:setpeername(plrIp, plrPort)
-
-    --upd:send("string")
-
     if myIp then
         networking = require("networking")
         networking:init(myIp, myPort, plrIp, plrPort)
@@ -580,14 +717,11 @@ function love.update(dt)
             networking.client = networking.listeningSocket:accept()
 
             if networking.client then
-                print("hi")
-                print(networking.client)
                 networking.client:settimeout(0)
             end
         else
             local data = networking:listen()
             if data then
-                print(data, data[1])
                 if string.sub(data, 1, 1) == "p" then
                     data = data:sub(2)
                     local purchaseInfo = {}
@@ -596,9 +730,7 @@ function love.update(dt)
                     end
                     local purchasedIndex, posX, posY = unpack(purchaseInfo)
 
-                    print(purchasedIndex, posX, posY, data)
-
-                    placeEntity(tonumber(purchasedIndex), tonumber(posX), tonumber(posY))                    
+                    placeEntity(tonumber(purchasedIndex), tl.width - tonumber(posX) + 1, tonumber(posY), not game.side)                    
                 end
             end 
         end
@@ -626,11 +758,9 @@ function love.update(dt)
             end
 
 
-            print(tl.xOffset, tl.size, tl.width, game.width)
             if tl.xOffset > 0  then
                 tl.xOffset = 0
             elseif tl.xOffset < game.width - (tl.size * tl.width) then
-                print("resetl")
                 tl.xOffset = game.width - (tl.size * tl.width)
             end
 
