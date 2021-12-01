@@ -4,6 +4,9 @@ local component = concord.component
 local system = concord.system
 local world = concord.world
 local components = concord.components
+local networking
+
+local socket = require "socket"
 
 local cl = {
     default = {1,1,1,1},
@@ -16,7 +19,10 @@ local cl = {
     loadoutInfo = {0.7, 0.7,0.7},
     purchaseBar = {0.6, 0.6,0.6},
     purchaseBox = {0.5,0.5,0.5},
-    buttonHighlight = {0,0,0,0.5}
+    purchaseBoxBuyButton = {0.3,0.3,0.3},
+    buttonHighlight = {0,0,0,0.5},
+    black = {0,0,0},
+    red = {1,0,0}
 }
 
 local game = {
@@ -35,10 +41,11 @@ local player = {
 }
 
 local tl = {
-    height = 5,
+    height = 10,
     width = 20,
-    size = 120, 
-    xOffset = 0
+    size = 60, 
+    xOffset = 0,
+    defaultImageSize = 120
 }
 
 local loadouts = {
@@ -63,48 +70,63 @@ local loadouts = {
 local purchasableEntities = {
     {
         price = 10,
+        name = "shoaib"
     },
     {
-        price = 20
+        price = 20,
+        name = "kant"
     },
     {
-        price = 30
+        price = 30,
+        name = "leibniz"
     },
     {
-        price = 40
+        price = 40,
+        name = "descartes"
     },
     {
-        price = 50
+        price = 50,
+        name = "nietszche"
     },
     {
-        price = 60
+        price = 60,
+        name = "rousseau"
     },
     {
-        price = 70
+        price = 70,
+        name = "sartre"
     },
     {
-        price = 80
+        price = 80,
+        name = "foccault"
     },
     {
-        price = 90
+        price = 90,
+        name = "schopen"
     },
     {
-        price = 100
+        price = 100,
+        name = "camus"
     },
     {
-        price = 110
+        price = 110,
+        name = "voltaire"
     },
     {
-        price = 120
+        price = 120,
+        name = "witttein"
     },
     {
-        price = 130
+        price = 130,
+        name = "locke"
     },
     {
-        price = 140
+        price = 140,
+        name = "hegel"
     },
     {
-        price = 150
+        price = 150,
+        name = "aquinas"
     }
 }
 
@@ -115,8 +137,15 @@ local loadoutUI = {
 } 
 
 local purchaseUI = {
+    framePaddingY = 10,
     amount = 15,
-    size = 55
+    sizeX = 60,
+    sizeY = 70,
+    buttonPaddingX = 5,
+    buttonPaddingY = 45,
+    buttonHeight = 20,
+    popupHeight = 150,
+    popupWidth = 150
 }
 
 local fonts = {
@@ -126,12 +155,13 @@ local fonts = {
 }
 
 local layers = {{},{},{},{},{},{}}
-local gameEntityMap = {{},{},{},{},{}}
+local gameEntityMap = {}
 
 local inputs = {"right", "left"}
 
 local world = concord.world()
 local highlightEntity
+local popupDescriptionEntity
 
 concord.component("highlightOnMouse")
 
@@ -153,8 +183,9 @@ concord.component("drawable", function(sf, type, layer, args)
         canvas = unpack(args)
         sf.canvas = canvas
     elseif type == "image" then
-        image = unpack(args)
+        image, scale = unpack(args)
         sf.image = image
+        sf.scale = scale
     end
 end)
 
@@ -173,6 +204,8 @@ concord.component("gameEntity", function(sf, index, xLoc, yLoc)
     sf.yLoc = yLoc
 end)
 
+concord.component("popupDescription")
+
 local gameSystem = concord.system({
     gameEntities = {"gameEntity"}
 })
@@ -183,7 +216,8 @@ local drawUI = concord.system({
 
 local buttonSystem = concord.system({
     buttons = {"button"},
-    highlightables = {"button", "highlightOnMouse"}
+    highlightables = {"button", "highlightOnMouse"},
+    popups = {"popupDescription"}
 })
 
 function drawUI:init()
@@ -223,21 +257,34 @@ function buttonSystem:checkClick(x, y)
     end
 
     if gameStates.loadoutChosen and gameStates.purchaseMode then
+        popupDescriptionEntity:give("pos", 1200, 1200)
         if y < (tl.size * tl.height) then
             local purchaseIndex = gameStates.purchaseMode
             posX, posY = getTilePosition(x,y)
             if player.cash >= purchasableEntities[purchaseIndex].price and gameEntityMap[posY][posX] == nil then
-                player.cash = player.cash - purchasableEntities[purchaseIndex].price
+                if posX ~= 1 and posX ~= tl.width then
+                    if networking then 
+                        networking:send("p"..tostring(purchaseIndex)..":"..tostring(posX)..":"..tostring(posY)) 
+                    end
 
-                local newEntity = concord.entity(world)
-                :give("gameEntity", purchaseIndex, posX, posY)
-                :give("drawable", "image", 5,{purchasableEntities[purchaseIndex].image})
-                :give("pos", (posX-1) * tl.size, (posY-1) * tl.size)
-               
-                readyToPlaceEntity:give("pos", 1200, 1200)
+                    player.cash = player.cash - purchasableEntities[purchaseIndex].price
+
+                    placeEntity(purchaseIndex, posX, posY)
+                
+                    readyToPlaceEntity:give("pos", 1200, 1200)
+                end
             end
         end
     end
+end
+
+function placeEntity(index, posX, posY)
+    print(purchasableEntities)
+    print(index, posX, posY, purchasableEntities[index], tl.size, tl.defaultImageSize)
+    local newEntity = concord.entity(world)
+    :give("gameEntity", index, posX, posY)
+    :give("drawable", "image", 5,{purchasableEntities[index].image, tl.size/tl.defaultImageSize})
+    :give("pos", (posX-1) * tl.size, (posY-1) * tl.size)
 end
 
 function buttonSystem:highlight(x,y)
@@ -246,7 +293,7 @@ function buttonSystem:highlight(x,y)
     for _, ent in ipairs(self.highlightables) do
         button = ent.button
         if x > button.x and x < button.x + button.width and y > button.y and y < button.y + button.height then
-            highlighted = true
+            highlighted = ent
             highlightEntity:give("pos", button.x, button.y)
             highlightEntity.drawable.width = button.width
             highlightEntity.drawable.height = button.height
@@ -256,12 +303,21 @@ function buttonSystem:highlight(x,y)
 
     if not highlighted then
         highlightEntity:give("pos", 1200, 1200)
+
+        if gameStates.loadoutChosen then
+            popupDescriptionEntity:give("pos", 1200, 1200)
+        end
+    else
+        if self.popups:has(highlighted) and not gameStates.purchaseMode then
+            popupDescriptionEntity:give("pos", highlighted.button.x, highlighted.button.y - purchaseUI.popupHeight - purchaseUI.framePaddingY - purchaseUI.buttonPaddingY - 5)
+        end
     end
 
     if gameStates.loadoutChosen and gameStates.purchaseMode then
        setPurchaseHighlightPosition(x,y) 
     end
 end
+
 
 function drawUI:draw()
     for i,layer in ipairs(layers) do
@@ -273,7 +329,8 @@ function drawUI:draw()
             elseif entity.drawable.type == "canvas" then
                 love.graphics.draw(entity.drawable.canvas, entity.pos.x, entity.pos.y)
             elseif entity.drawable.type == "image" then
-                love.graphics.draw(entity.drawable.image, entity.pos.x + tl.xOffset, entity.pos.y)
+                love.graphics.draw(entity.drawable.image, entity.pos.x + tl.xOffset, entity.pos.y, 0,entity.drawable.scale, entity.drawable.scale)
+                --love.graphics.draw()
             end
         end
     end
@@ -289,6 +346,11 @@ function tl:draw()
                 love.graphics.setColor(cl.backgroundColor)    
             else
                 love.graphics.setColor(cl.alternateBackgroundColor)
+            end
+            if (y == 1 and x == 1) or (x == 1 and y == self.height) or (x == self.width and y == 1) or (x == self.width and y == self.height) then
+                love.graphics.setColor(cl.black)
+            elseif x == 1 or x == self.width then
+                love.graphics.setColor(cl.red)
             end
             love.graphics.rectangle("fill", posX + tl.xOffset, posY, self.size, self.size)
             love.graphics.setColor(cl.default)
@@ -307,12 +369,42 @@ highlightEntity = concord.entity(world)
 readyToPlaceEntity = concord.entity(world)
 :give("pos", 1200, 1200)
 :give("drawable","rectangle", 2,{tl.size, tl.size, cl.buttonHighlight})
+ 
 
 function purchaseMode(args)
     gameStates.purchaseMode = unpack(args)
 end
 
+function generatePopUp(index)
+
+    local canvas = love.graphics.newCanvas(purchaseUI.popupWidth, purchaseUI.popupHeight)
+    
+    love.graphics.setCanvas(canvas)
+    love.graphics.setColor(cl.loadoutInfo)
+    love.graphics.rectangle("fill",0,0,canvas:getWidth(), canvas:getHeight())
+
+    local y = 0
+
+    for ind, value in pairs(purchasableEntities[index]) do
+        love.graphics.setColor(cl.default)
+        if ind ~= "image" then
+            love.graphics.print(ind.. ": ".. value, 0, y)
+            y = y + 15
+        end
+    end
+
+
+    love.graphics.setCanvas()
+    love.graphics.setColor(cl.default)
+    
+    return canvas
+end
+
 function chooseAloadout(args)
+    if networking then
+        networking:send("norm")
+    end
+
     world:clear()
 
     world:addEntity(highlightEntity)
@@ -332,17 +424,30 @@ function chooseAloadout(args)
     love.graphics.setColor(cl.purchaseBar)
     love.graphics.rectangle("fill",0,0, canvas:getWidth(), canvas:getHeight())
     
-    love.graphics.setColor(cl.purchaseBox)
-    local stripSize = (canvas:getWidth() - (purchaseUI.amount * purchaseUI.size)) / (purchaseUI.amount + 1)
+    local stripSize = (canvas:getWidth() - (purchaseUI.amount * purchaseUI.sizeX)) / (purchaseUI.amount + 1)
     for i = 1,purchaseUI.amount do
-        xPos = (i * stripSize) + ((i-1) * purchaseUI.size)
-        yPos = 20
+        xPos = (i * stripSize) + ((i-1) * purchaseUI.sizeX)
+        yPos = purchaseUI.framePaddingY
 
-        love.graphics.rectangle("fill", xPos, yPos, purchaseUI.size, purchaseUI.size)
+        love.graphics.setColor(cl.purchaseBox)
+        love.graphics.rectangle("fill", xPos, yPos, purchaseUI.sizeX, purchaseUI.sizeY)
+        
+        love.graphics.setColor(cl.default)
+        love.graphics.printf(purchasableEntities[i].name, xPos, yPos, purchaseUI.sizeX, "center")
+        love.graphics.printf("".. purchasableEntities[i].price, xPos, yPos + 20, purchaseUI.sizeX, "center")
+
+        love.graphics.setColor(cl.purchaseBoxBuyButton)
+        love.graphics.rectangle("fill", xPos+purchaseUI.buttonPaddingX, yPos + purchaseUI.buttonPaddingY, purchaseUI.sizeX - (purchaseUI.buttonPaddingX * 2), purchaseUI.buttonHeight )
+        love.graphics.setColor(cl.default)
+        love.graphics.printf("Buy", xPos+purchaseUI.buttonPaddingX, yPos + purchaseUI.buttonPaddingY + 2, purchaseUI.sizeX - (purchaseUI.buttonPaddingX * 2), "center")
+
+        --love.graphics.rectangle()
+
 
         local buttonEntity = concord.entity(world)
-        buttonEntity:give("button", canvasX + xPos, canvasY + yPos, purchaseUI.size, purchaseUI.size, purchaseMode, {i})
+        buttonEntity:give("button", canvasX+xPos+purchaseUI.buttonPaddingX,canvasY+yPos + purchaseUI.buttonPaddingY, purchaseUI.sizeX - (purchaseUI.buttonPaddingX * 2), purchaseUI.buttonHeight, purchaseMode, {i})
         buttonEntity:give("highlightOnMouse")
+        buttonEntity:give("popupDescription")
     end
 
     love.graphics.setCanvas()
@@ -355,11 +460,34 @@ function chooseAloadout(args)
     for i = 1, purchaseUI.amount do
         purchasableEntities[i].image = love.graphics.newImage("Images/"..i..".png")
     end
+
+    local canvas = generatePopUp(1)
+
+    popupDescriptionEntity = concord.entity(world)
+    :give("pos", 1200, 1200)
+    :give("drawable", "canvas", 2, {canvas})
+
+    for i =1, tl.height do
+        gameEntityMap[i] = {}
+    end
 end
 
-function love.load()
+function love.load(args)
+    local myIp, myPort, plrIp, plrPort = unpack(args)
+
+    --udp = socket.udp()
+    --udp:settimeout(0)
+    --udp:setpeername(plrIp, plrPort)
+
+    --upd:send("string")
+
+    if myIp then
+        networking = require("networking")
+        networking:init(myIp, myPort, plrIp, plrPort)
+    end
+
     love.window.setMode(game.width, game.height)
-    love.window.setTitle(game.title)
+    love.window.setTitle(game.title..tostring(myPort))
     love.graphics.setBackgroundColor(cl.backgroundColor)
     local font = fonts.large
 
@@ -429,11 +557,15 @@ end
 function setPurchaseHighlightPosition(x,y)
     xPos, yPos = getTilePosition(x,y)
 
-    if yPos <= tl.height then
-        if gameEntityMap[yPos][xPos] == nil then
-            readyToPlaceEntity:give("pos", ((xPos-1)*tl.size) + tl.xOffset, (yPos-1) * tl.size)
+    if xPos ~= tl.width and xPos ~= 1 then
+        if yPos <= tl.height and yPos > 0 then
+            if gameEntityMap[yPos][xPos] == nil then
+                readyToPlaceEntity:give("pos", ((xPos-1)*tl.size) + tl.xOffset, (yPos-1) * tl.size)
+            else
+                readyToPlaceEntity:give("pos", 1200, 1200)    
+            end
         else
-            readyToPlaceEntity:give("pos", 1200, 1200)    
+            readyToPlaceEntity:give("pos", 1200, 1200)
         end
     else
         readyToPlaceEntity:give("pos", 1200, 1200)
@@ -442,6 +574,35 @@ end
 
 function love.update(dt)
     world:emit("update", dt)
+
+    if networking then
+        if not networking.client then
+            networking.client = networking.listeningSocket:accept()
+
+            if networking.client then
+                print("hi")
+                print(networking.client)
+                networking.client:settimeout(0)
+            end
+        else
+            local data = networking:listen()
+            if data then
+                print(data, data[1])
+                if string.sub(data, 1, 1) == "p" then
+                    data = data:sub(2)
+                    local purchaseInfo = {}
+                    for value in string.gmatch(data, "([^:]+)") do
+                        table.insert(purchaseInfo, value)
+                    end
+                    local purchasedIndex, posX, posY = unpack(purchaseInfo)
+
+                    print(purchasedIndex, posX, posY, data)
+
+                    placeEntity(tonumber(purchasedIndex), tonumber(posX), tonumber(posY))                    
+                end
+            end 
+        end
+    end
 
     if gameStates.loadoutChosen then
         local left = false
@@ -464,13 +625,18 @@ function love.update(dt)
                 tl.xOffset = tl.xOffset + 10
             end
 
+
+            print(tl.xOffset, tl.size, tl.width, game.width)
             if tl.xOffset > 0  then
                 tl.xOffset = 0
-            elseif tl.xOffset < - 1400 then
-                tl.xOffset = -1400
+            elseif tl.xOffset < game.width - (tl.size * tl.width) then
+                print("resetl")
+                tl.xOffset = game.width - (tl.size * tl.width)
             end
 
-            setPurchaseHighlightPosition(love.mouse.getPosition())
+            if gameStates.purchaseMode then
+                setPurchaseHighlightPosition(love.mouse.getPosition())
+            end
         end
     end
 end

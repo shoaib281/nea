@@ -113,7 +113,9 @@ class playerFrame():
         self.connection = False
         self.clearEverything()
 
-        launch.startGame()
+        plrIndex = self.index
+        
+        launch.startGame(self.window.networking.myIp, self.window.networking.listeningPort + 1,self.window.networking.playerDict[plrIndex]["address"],self.window.networking.playerDict[plrIndex]["listeningPort"] + 1)
 
     def destroyFrame(self):
         self.frame.pack_forget()

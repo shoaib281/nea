@@ -2,6 +2,7 @@ import socket
 import threading
 import time
 import random
+import launch
 
 class networkingClass():
     def __init__(self, username, window):
@@ -22,6 +23,10 @@ class networkingClass():
         self.listeningInviteSocket.bind((socket.gethostname(), self.listeningPort))
         self.listeningInviteSocket.listen()
 
+        self.myIp = socket.gethostbyname(socket.gethostname())
+
+        print(self.myIp, self.listeningPort)
+
         self.killDetection = 5
         
 
@@ -31,7 +36,6 @@ class networkingClass():
         threading.Timer(self.broadcastTime, self.selfBroadcast,[]).start()
         
         self.broadcastSocket.sendto(bytes(self.username + ":" + str(self.listeningPort),"utf-8"),("<broadcast>",self.broadcastPort))
-        print("broadcasted")
 
 
     def listeningAcceptReject(self, index, frame):
@@ -41,6 +45,7 @@ class networkingClass():
 
         if response == "Accept":
             frame.clearEverything()
+            launch.startGame(self.myIp, self.listeningPort + 1, self.playerDict[index]["address"], self.playerDict[index]["listeningPort"] + 1)
         elif response == "Reject":
             frame.addInviteButton()
 
@@ -60,13 +65,12 @@ class networkingClass():
                     targetPlayer = key
                     break
 
-            print(targetPlayer)
-
             if targetPlayer:
                 for frame in self.window.frames:
                     if targetPlayer == frame.player["index"]:
                         frame.addAcceptReject()
                         frame.connection = clientSocket 
+                        frame.index = targetPlayer
                         break
 
     def checkKill(self, player):
@@ -82,7 +86,6 @@ class networkingClass():
                         break
 
     def newDataToDict(self, data):
-        print("data: ", data)
 
         username, address = data
         username = username.decode("utf-8")
@@ -119,6 +122,4 @@ class networkingClass():
 
     def loop(self):
         while True:
-            print("boom")
             self.newDataToDict(self.listeningBroadcastSocket.recvfrom(1024))
-            print("scholloom")
