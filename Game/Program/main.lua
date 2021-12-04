@@ -291,7 +291,7 @@ function gameSystem:update(dt)
                     gameEntityMap[posY][posX] = baseGameEntity.gameEntity
 
                     baseGameEntity:give("gameEntity", baseGameEntity.gameEntity.index, posX, posY)
-                    baseGameEntity.pos.x = (posX-1) * tl.size
+                    baseGameEntity.pos.x = (posX-1) * tl.size--test
                     baseGameEntity.pos.y = (posY-1) * tl.size
                 end
             end
