@@ -505,7 +505,7 @@ function gameEntityMap:pathfind(startNode, endNode)
         end
     end
 
-    return {}
+    return {} -- test
 end
 
 function placeEntity(index, posX, posY, side)
