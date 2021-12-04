@@ -38,7 +38,9 @@ local gameStates = {
 }
 
 local player = {
-    cash = 1000
+    cash = 1000,
+    health = 1000,
+    enemyHealth = 1000
 }
 
 local tl = {
@@ -77,7 +79,7 @@ local purchasableEntities = {
     {
         price = 20,
         name = "kant",
-        pathfind = "tower"
+        pathfind = "not a tower"
     },
     {
         price = 30,
@@ -278,23 +280,20 @@ function gameSystem:update(dt)
 
             if not baseGameEntity.team.state then
                 endNode[1] = tl.width     
-                print("hi?")
             end
-
-            print(endNode[1], endNode[2])
 
             if pathfindMode == "tower" then
                 local posX, posY = unpack(
                     gameEntityMap:pathfind({baseGameEntity.gameEntity.xLoc, baseGameEntity.gameEntity.yLoc}, endNode))
-                
-                print("sososo", posX, posY, baseGameEntity.gameEntity.xLoc, baseGameEntity.gameEntity.yLoc)
-                
-                gameEntityMap[baseGameEntity.gameEntity.yLoc][baseGameEntity.gameEntity.xLoc] = nil
-                gameEntityMap[posY][posX] = baseGameEntity.gameEntity
+                                
+                if posX then
+                    gameEntityMap[baseGameEntity.gameEntity.yLoc][baseGameEntity.gameEntity.xLoc] = nil
+                    gameEntityMap[posY][posX] = baseGameEntity.gameEntity
 
-                baseGameEntity:give("gameEntity", baseGameEntity.gameEntity.index, posX, posY)
-                baseGameEntity.pos.x = (posX-1) * tl.size
-                baseGameEntity.pos.y = (posY-1) * tl.size
+                    baseGameEntity:give("gameEntity", baseGameEntity.gameEntity.index, posX, posY)
+                    baseGameEntity.pos.x = (posX-1) * tl.size
+                    baseGameEntity.pos.y = (posY-1) * tl.size
+                end
             end
         end
     end
@@ -410,7 +409,6 @@ function gameEntityMap:pathfind(startNode, endNode)
     local distance = distanceAlgorithm(startNode, endNode)
 
     if distance == 0 then
-        print("shack?")
         return {startNode[1], startNode[2]}
     end
     
@@ -422,9 +420,16 @@ function gameEntityMap:pathfind(startNode, endNode)
 
     
 
+
+
     local tempMap = {}
-    for i = 1,tl.height do
-        tempMap[i] = {}
+
+    for yPos,row in ipairs(gameEntityMap) do
+        tempMap[yPos] = {}
+
+        for xPos, value in pairs(row) do
+            tempMap[yPos][xPos] = "wagwan"
+        end
     end
 
     tempMap[startNode[2]][startNode[1]] = {}
@@ -432,64 +437,75 @@ function gameEntityMap:pathfind(startNode, endNode)
     tempMap[startNode[2]][startNode[1]].hCost = distance
     tempMap[startNode[2]][startNode[1]].fCost = distance
 
-    --print("hi", distance, endNode[1], endNode[2], startNode[1], startNode[2])
+    tempMap[endNode[2]][endNode[1]] = nil
 
-    while true do
-        local bestNode -- x,y
+    local bestNode = {startNode[1], startNode[2],tempMap[startNode[2]][startNode[1]].fCost} -- x,y
 
-        for i = 1, tl.height do
-            for j = 1, tl.width do
-                if tempMap[i][j] and tempMap[i][j] ~= "closed" then
-                    if not bestNode then
-                        bestNode = {j,i, tempMap[i][j].fCost}
-                    elseif bestNode[3] > tempMap[i][j].fCost then
-                        bestNode = {j, i, tempMap[i][j].fCost}
-                    end
-                end
-            end
-        end
-        --print("yo?aaaaaaaa", bestNode[1], bestNode[2])
-        --print("bonsoir", tempMap[bestNode[2]][bestNode[1]].fCost, bestNode[2], bestNode[1])
 
+    repeat 
         tempMap[bestNode[2]][bestNode[1]] = "closed"
 
         for a = 1,4 do
             local i, j
-            
-            --[[
-            if a == 1 then 
-                i = -1
-                j = 0
-            elseif a == 2 then
-                i = 0
-                j = -1
-            elseif a == 3 then
-                i = 0
-                j = 1
-            else
-                i = 1
-                j = 0
-            end    
-            ]]--
 
             i = -1+ math.floor(a / 2)
             j = 1 - math.fmod(a,3)
 
             if i+bestNode[2] >= 1 and i+bestNode[2] <= tl.height and j+bestNode[1] >= 1 and j+bestNode[1] <= tl.width then
-                if not tempMap[i+bestNode[2]][j+bestNode[1]] or tempMap[i+bestNode[2]][j+bestNode[1]] ~= "closed" then
+                if not tempMap[i+bestNode[2]][j+bestNode[1]] then
                     tempMap[i+bestNode[2]][j+bestNode[1]] = {}
                     tempNode = tempMap[i+bestNode[2]][j+bestNode[1]]
                     tempNode.gCost = distanceAlgorithm(startNode, {j+bestNode[1],i+bestNode[2]})
                     tempNode.hCost = distanceAlgorithm(endNode,   {j+bestNode[1],i+bestNode[2]})
                     tempNode.fCost = tempNode.hCost + tempNode.gCost
-
-                    if tempNode.hCost == 0 then
-                        return {bestNode[1], bestNode[2]}
+                end
+                if tempMap[i+bestNode[2]][j+bestNode[1]] then
+                    if tempMap[i+bestNode[2]][j+bestNode[1]].fCost then
+                        if tempMap[i+bestNode[2]][j+bestNode[1]].hCost == 0 then
+                            return {bestNode[1], bestNode[2]}
+                        end
                     end
                 end
             end
         end
+
+        bestNode = nil
+
+        for i = 1, tl.height do -- finds lowest f cost
+            for j = 1, tl.width do
+                if tempMap[i][j] and tempMap[i][j] ~= "closed" then
+                    if tempMap[i][j].fCost then
+                        if not bestNode then
+                            bestNode = {j,i, tempMap[i][j].fCost}
+                        elseif bestNode[3] > tempMap[i][j].fCost then
+                            bestNode = {j, i, tempMap[i][j].fCost}
+                        end
+                    end
+                end
+            end
+        end
+
+
+
+    until not bestNode
+    
+    for a = 1,4 do -- moves as close to the wall as possible
+        local i, j
+
+        i = -1+ math.floor(a / 2)
+        j = 1 - math.fmod(a,3)
+
+        if i+endNode[2] >= 1 and i+endNode[2] <= tl.height and j+endNode[1] >= 1 and j+endNode[1] <= tl.width then
+            if not tempMap[i+endNode[2]][j+endNode[1]] then
+                local newDist = distanceAlgorithm({i+endNode[2],j+endNode[1]}, {startNode[2], startNode[1]})
+                if newDist < distance then
+                    return {j+endNode[1], i+endNode[2]}
+                end
+            end
+        end
     end
+
+    return {}
 end
 
 function placeEntity(index, posX, posY, side)
@@ -780,6 +796,8 @@ function love.draw()
     if gameStates.loadoutChosen then
         love.graphics.setFont(fonts.small)
         love.graphics.print("Cash: ".. player.cash, 10,10)
+        love.graphics.print("Health: ".. player.health, 10, 40)
+        love.graphics.print("Enemy Health: ".. player.enemyHealth, 10, 70)
     end
 end
 
