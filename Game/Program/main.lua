@@ -22,7 +22,8 @@ local cl = {
     purchaseBoxBuyButton = {0.3,0.3,0.3},
     buttonHighlight = {0,0,0,0.5},
     black = {0,0,0},
-    red = {1,0,0}
+    red = {1,0,0},
+    transBorder = {1,0,0,0.5}
 }
 
 local game = {
@@ -178,6 +179,8 @@ local inputs = {"right", "left"}
 
 local world = concord.world()
 local highlightEntity
+local readyToPlaceEntity
+local placeBox
 local popupDescriptionEntity
 
 concord.component("highlightOnMouse")
@@ -192,10 +195,11 @@ concord.component("drawable", function(sf, type, layer, args)
     sf.layer = layer
 
     if type == "rectangle" then
-        width, height, color = unpack(args)
+        width, height, color, fillType = unpack(args)
         sf.width = width
         sf.height = height
         sf.color = color
+        sf.fillType = fillType
     elseif type == "canvas" then
         canvas = unpack(args)
         sf.canvas = canvas
@@ -382,7 +386,7 @@ function drawUI:draw()
         for entity,_ in pairs(layer) do
             if entity.drawable.type == "rectangle" then
                 love.graphics.setColor(entity.drawable.color)
-                love.graphics.rectangle("fill", entity.pos.x, entity.pos.y, entity.drawable.width, entity.drawable.height)
+                love.graphics.rectangle(entity.drawable.fillType, entity.pos.x, entity.pos.y, entity.drawable.width, entity.drawable.height)
                 love.graphics.setColor(cl.default)
             elseif entity.drawable.type == "canvas" then
                 love.graphics.draw(entity.drawable.canvas, entity.pos.x, entity.pos.y)
@@ -544,15 +548,27 @@ world:addSystems(buttonSystem)
 
 highlightEntity = concord.entity(world)
 :give("pos", 1200,1200)
-:give("drawable", "rectangle",4,{20,20, cl.buttonHighlight})
+:give("drawable", "rectangle", 4,{20,20, cl.buttonHighlight, "fill"})
 
 readyToPlaceEntity = concord.entity(world)
 :give("pos", 1200, 1200)
-:give("drawable","rectangle", 2,{tl.size, tl.size, cl.buttonHighlight})
- 
+:give("drawable","rectangle", 2,{tl.size, tl.size, cl.buttonHighlight, "fill"})
+
+placeBox = concord.entity(world)
+:give("pos", 1200, 1200)
+:give("drawable", "rectangle", 2,{game.width, tl.size *tl.height, cl.transBorder, "line"})
 
 function purchaseMode(args)
-    gameStates.purchaseMode = unpack(args)
+    local enabled = unpack(args)
+
+    gameStates.purchaseMode = enabled
+
+    if enabled then
+        print("yo")
+        placeBox:give("pos", 0, 0)
+    else
+        placeBox:give("pos", 1200, 1200)
+    end
 end
 
 function generatePopUp(index)
@@ -587,6 +603,7 @@ function chooseAloadout(args)
 
     world:addEntity(highlightEntity)
     world:addEntity(readyToPlaceEntity)
+    world:addEntity(placeBox)
     world:addSystems(gameSystem)
 
     loadoutNumber = unpack(args)
@@ -661,6 +678,7 @@ function love.load(args)
     love.window.setMode(game.width, game.height)
     love.window.setTitle(game.title..tostring(myPort))
     love.graphics.setBackgroundColor(cl.backgroundColor)
+    love.graphics.setLineWidth(10)
     local font = fonts.large
 
     local stripSize = (game.width - (loadoutUI.amount * loadoutUI.width)) / (loadoutUI.amount + 1) 
@@ -728,8 +746,6 @@ end
 
 function setPurchaseHighlightPosition(x,y)
     xPos, yPos = getTilePosition(x,y)
-
-    print(yPos, tl.height/2, xPos, tl.width)
 
     if not (yPos == tl.height/2 and (xPos == 1 or xPos == tl.width)) then
         if yPos <= tl.height and yPos > 0 then
@@ -833,7 +849,7 @@ end
 function love.keypressed(key, scancode, isrepeat)
     if key == "escape" then
         if gameStates.loadoutChosen then 
-            gameStates.purchaseMode = false 
+            purchaseMode({false}) 
             readyToPlaceEntity:give("pos", 1200, 1200)
         end 
     end
