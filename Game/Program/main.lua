@@ -73,78 +73,121 @@ local purchasableEntities = {
         price = 10,
         name = "shoaib",
         pathfind = "tower",
-        attackTarget = "tower",
-        towerDamage = -30
+        attackStyle = "melee",
+        damage = -5,
+        maxHealth = 100
+    },
+    {
+        price = 11,
+        name = "kant",
+        pathfind = "enemies",
+        attackStyle = "melee",
+        damage = -30,
+        maxHealth = 100
+    },
+    {
+        price = 12,
+        name = "leibniz",
+        pathfind = "enemies",
+        attackStyle = "ranged",
+        range = 4,
+        damage = -30,
+        maxHealth = 100
+    },
+    {
+        price = 13,
+        name = "descartes",
+        pathfind = "tower",
+        effects = "regenerate",
+        range = 4,
+        maxHealth = 100
+    },
+    {
+        price = 14,
+        name = "nietszche",
+        pathfind = "stationary",
+        attackStyle = "ranged",
+        range = 4,
+        damage = -30,
+        maxHealth = 100
+    },
+    {
+        price = 15,
+        name = "rousseau",
+        pathfind = "tower",
+        attackStyle = "melee",
+        range = 4,
+        damage = -30,
+        maxHealth = 100
+    },
+    {
+        price = 16,
+        name = "sartre",
+        pathfind = "potion",
+        attackStyle = "damage",
+        range = 4,
+        damage = -30
+    },
+    {
+        price = 17,
+        name = "foccault",
+        pathfind = "potion",
+        attackStyle = "heal",
+        range = 4,
+        damage = 30
+    },
+    {
+        price = 18,
+        name = "schopen",
+        pathfind = "potion",
+        attackStyle = "freeze",
+        range = 4,
+        duration = 4
+    },
+    {
+        price = 19,
+        name = "camus",
+        pathfind = "potion",
+        attackStyle = "poison",
+        range = 4,
+        duration = 4,
+        damage = -15
     },
     {
         price = 20,
-        name = "kant",
-        pathfind = "stationary"
-    },
-    {
-        price = 30,
-        name = "leibniz",
-        pathfind = "tower"
-    },
-    {
-        price = 40,
-        name = "descartes",
-        pathfind = "tower"
-    },
-    {
-        price = 50,
-        name = "nietszche",
-        pathfind = "tower"
-    },
-    {
-        price = 60,
-        name = "rousseau",
-        pathfind = "tower"
-    },
-    {
-        price = 70,
-        name = "sartre",
-        pathfind = "tower"
-    },
-    {
-        price = 80,
-        name = "foccault",
-        pathfind = "tower"
-    },
-    {
-        price = 90,
-        name = "schopen",
-        pathfind = "tower"
-    },
-    {
-        price = 100,
-        name = "camus",
-        pathfind = "tower"
-    },
-    {
-        price = 110,
         name = "voltaire",
-        pathfind = "tower"
+        pathfind = "stationary",
+        maxHealth = 100
     },
     {
-        price = 120,
+        price = 5,
         name = "witttein",
-        pathfind = "tower"
+        pathfind = "stationary",
+        maxHealth = 20
     },
     {
-        price = 130,
+        price = 22,
         name = "locke",
-        pathfind = "tower"
+        pathfind = "stationary",
+        attackStyle = "thorns",
+        damage = -15,
+        maxHealth = 100
     },
     {
-        price = 140,
+        price = 23,
         name = "hegel",
-        pathfind = "tower"
+        pathfind = "stationary",
+        attackStyle = "money",
+        damage = 30,
+        maxHealth = 100
     },
     {
-        price = 150,
+        price = 24,
         name = "aquinas",
-        pathfind = "tower"
+        pathfind = "stationary",
+        attackStyle = "health",
+        damage = 30,
+        maxHealth = 100
     }
 }
 
@@ -174,7 +217,8 @@ local fonts = {
 
 local layers = {{},{},{},{},{},{}}
 local gameEntityMap = {}
-
+local myTeamEntities = {}
+local enemyTeamEntities = {}
 local inputs = {"right", "left"}
 
 local world = concord.world()
@@ -220,10 +264,20 @@ concord.component("button", function(sf, x, y, width, height, func, args)
 end)
 
 concord.component("gameEntity", function(sf, index, xLoc, yLoc, side)
+    local maxHealth = purchasableEntities[index].maxHealth
+    local attackStyle = purchasableEntities[index].attackStyle
+
     sf.index = index
     sf.xLoc = xLoc
     sf.yLoc = yLoc
     sf.team = side
+    sf.health = maxHealth
+    sf.maxHealth = maxHealth
+    sf.attackStyle = attackStyle
+end)
+
+concord.component("ranged", function(sf, target)
+    sf.target = target
 end)
 
 concord.component("popupDescription")
@@ -231,7 +285,6 @@ concord.component("reachedTower")
 
 local gameSystem = concord.system({
     gameEntities = {"gameEntity"},
-    towerAttackers = {"reachedTower"}
 })
 
 local drawUI = concord.system({
@@ -263,10 +316,22 @@ function gameSystem:init()
     self.gameEntities.onEntityAdded = function(pool, entity)
         local ge = entity.gameEntity
         gameEntityMap[ge.yLoc][ge.xLoc] = entity
+
+        if ge.team == game.side then -- my team
+            myTeamEntities[entity] = true
+        else
+            enemyTeamEntities[entity] = true
+        end
     end
     self.gameEntities.onEntityRemoved = function(pool, entity)
         local ge = entity.gameEntity
         gameEntityMap[ge.yLoc][ge.xLoc] = nil
+
+        if ge.team == game.side then
+            myTeamEntities[entity] = false
+        else
+            enemyTeamEntities[entity] = false
+        end
     end
 end
 
@@ -277,15 +342,6 @@ function gameSystem:update(dt)
     if totalDt > .2 then
         totalDt = 0
 
-        for _,towerAttacker in ipairs(self.towerAttackers) do
-           local index = towerAttacker.gameEntity.index
-           local damage = purchasableEntities[index].towerDamage
-            
-           local team = towerAttacker.gameEntity.team
-           
-           game:updateHealth(team == game.side, damage)
-        end
-
         for _, baseGameEntity in ipairs(self.gameEntities) do
 
             local pathfindMode = purchasableEntities[baseGameEntity.gameEntity.index].pathfind
@@ -295,21 +351,50 @@ function gameSystem:update(dt)
                 endNode[1] = tl.width     
             end
 
-            if pathfindMode == "tower" then
-                local posX, posY, additionalArgs = unpack(
-                    gameEntityMap:pathfind({baseGameEntity.gameEntity.xLoc, baseGameEntity.gameEntity.yLoc}, endNode))
-                                
-                if additionalArgs then
-                    if additionalArgs == "reached" then
-                        baseGameEntity:give("reachedTower")
-                    end
-                elseif posX then
-                    gameEntityMap[baseGameEntity.gameEntity.yLoc][baseGameEntity.gameEntity.xLoc] = nil
-                    gameEntityMap[posY][posX] = baseGameEntity.gameEntity
+            local posX, posY
 
-                    baseGameEntity:give("gameEntity", baseGameEntity.gameEntity.index, posX, posY, baseGameEntity.gameEntity.team)
-                    baseGameEntity.pos.x = (posX-1) * tl.size
-                    baseGameEntity.pos.y = (posY-1) * tl.size
+            if pathfindMode == "tower" then
+                posX, posY = unpack(
+                    gameEntityMap:pathfindForTower({baseGameEntity.gameEntity.xLoc, baseGameEntity.gameEntity.yLoc}, endNode)
+                )
+            elseif pathfind == "enemy" then
+                posX, posY = unpack(
+                    gameEntityMap:pathfindForEnemy({baseGameEntity.gameEntity.xLoc, baseGameEntity.gameEntity.yLoc})
+                )
+            end
+
+            if posX then
+                gameEntityMap[baseGameEntity.gameEntity.yLoc][baseGameEntity.gameEntity.xLoc] = nil
+
+                baseGameEntity:give("gameEntity", baseGameEntity.gameEntity.index, posX, posY, baseGameEntity.gameEntity.team)
+                baseGameEntity.pos.x = (posX-1) * tl.size
+                baseGameEntity.pos.y = (posY-1) * tl.size
+
+                gameEntityMap[posY][posX] = baseGameEntity
+            end
+        end
+
+        for _, baseGameEntity in ipairs(self.gameEntities) do
+            local towerNode = {1, tl.height/2}
+
+            if not baseGameEntity.gameEntity.team then
+                towerNode[1] = tl.width     
+            end
+
+            if purchasableEntities[baseGameEntity.gameEntity.index].attackStyle == "melee" then
+
+                local enemyEntity = gameEntityMap:getLocalEnemies({baseGameEntity.gameEntity.xLoc, baseGameEntity.gameEntity.yLoc}, towerNode)
+
+                if enemyEntity then
+                    local index = baseGameEntity.gameEntity.index
+                    local damage = purchasableEntities[index].damage
+                    local team = baseGameEntity.gameEntity.team
+
+                    if enemyEntity == "tower" then
+                        game:updateHealth(team == game.side, damage)
+                    else
+                        gameEntityMap:updateHealth(enemyEntity[1], enemyEntity[2], damage)
+                    end
                 end
             end
         end
@@ -422,24 +507,65 @@ function distanceAlgorithm(startNode, endNode)
     return math.sqrt((endNode[2] - startNode[2])^2 + (startNode[1] - endNode[1])^2)
 end
 
-function gameEntityMap:pathfind(startNode, endNode)
+function bubbleSortEnemies(array)
+    local swaps = true
 
-    local distance = distanceAlgorithm(startNode, endNode)
+    repeat 
+        swaps = false
 
-    if distance == 0 then
-        return {startNode[1], startNode[2]}
-    elseif distance == 1 then
-        return {startNode[1], startNode[2], "reached"}
+        for index, value in ipairs(array) do
+            if array[index + 1] then
+                if value[2] > array[index + 1][2] then
+                    local temp = value
+                    array[index] = array[index + 1]
+                    array[index + 1] = temp
+
+                    swaps = true
+                end
+            end
+        end
+        
+    until not swaps
+
+    return array
+end
+
+function gameEntityMap:pathfindForEnemy(startNode)
+    local tempArray = {}
+    
+    for key, value in pairs(enemyTeamEntities) do
+        local distance = distanceAlgorithm(startNode, {key.gameEntities.xLoc, key.gameEntities.yLoc})
+
+        table.insert({tempArray, distance}, key)
     end
 
-    -- 12,6 1,5
+
+
+    local sortedListOfEnemies = bubbleSortEnemies(tempArray)
+
+    for _,enemy in ipairs(sortedListOfEnemies) do
+        local posX, posY = unpack(gameEntityMap:pathfind(startNode, {enemy[1].gameEntities.xLoc, enemy[1].gameEntities.yLoc}))
+
+        if posX then 
+            return {posX, posY}
+        end
+    end
+
+    -- no possible way to enemies or no enemies
+
+    return gameEntityMap:moveToTower(startNode)
+end
+
+function gameEntityMap:pathfind(startNode, endNode) -- already |found path| no path
+    local distance = distanceAlgorithm(startNode, endNode)
+
+    if distance == 1 then
+        return {nil, nil, true}
+    end
+
     local temp = startNode
-    local startNode = endNode -- 1,5
-    local endNode  = temp -- 12,6
-
-    
-
-
+    local startNode = endNode
+    local endNode = temp
 
     local tempMap = {}
 
@@ -456,10 +582,10 @@ function gameEntityMap:pathfind(startNode, endNode)
     tempMap[startNode[2]][startNode[1]].hCost = distance
     tempMap[startNode[2]][startNode[1]].fCost = distance
 
+    
     tempMap[endNode[2]][endNode[1]] = nil
 
-    local bestNode = {startNode[1], startNode[2],tempMap[startNode[2]][startNode[1]].fCost} -- x,y
-
+    local bestNode = {startNode[1], startNode[2],tempMap[startNode[2]][startNode[1]].fCost}
 
     repeat 
         tempMap[bestNode[2]][bestNode[1]] = "closed"
@@ -481,7 +607,7 @@ function gameEntityMap:pathfind(startNode, endNode)
                 if tempMap[i+bestNode[2]][j+bestNode[1]] then
                     if tempMap[i+bestNode[2]][j+bestNode[1]].fCost then
                         if tempMap[i+bestNode[2]][j+bestNode[1]].hCost == 0 then
-                            return {bestNode[1], bestNode[2]}
+                            return {bestNode[1], bestNode[2], true}
                         end
                     end
                 end
@@ -507,28 +633,75 @@ function gameEntityMap:pathfind(startNode, endNode)
 
 
     until not bestNode
-    
+
+    return {nil, nil, false}
+
+end
+
+function gameEntityMap:pathfindForTower(startNode, endNode)   
+    local posX, posY, possible = unpack(gameEntityMap:pathfind(startNode, endNode))
+
+    if possible then
+        return {posX, posY}
+    end
+
+    return gameEntityMap:moveToTower(startNode, endNode)
+end
+
+function gameEntityMap:moveToTower(startNode, endNode)
+    local distance = distanceAlgorithm(startNode, endNode)
+
     for a = 1,4 do -- moves as close to the wall as possible
         local i, j
 
         i = -1+ math.floor(a / 2)
         j = 1 - math.fmod(a,3)
 
-        if i+endNode[2] >= 1 and i+endNode[2] <= tl.height and j+endNode[1] >= 1 and j+endNode[1] <= tl.width then
-            if not tempMap[i+endNode[2]][j+endNode[1]] then
-                local newDist = distanceAlgorithm({i+endNode[2],j+endNode[1]}, {startNode[2], startNode[1]})
+        if i+startNode[2] >= 1 and i+startNode[2] <= tl.height and j+startNode[1] >= 1 and j+startNode[1] <= tl.width then
+            if not self[i+startNode[2]][j+startNode[1]] then
+                local newDist = distanceAlgorithm({i+startNode[2],j+startNode[1]}, {endNode[2], endNode[1]})
                 if newDist < distance then
-                    return {j+endNode[1], i+endNode[2]}
+                    return {j+startNode[1], i+startNode[2]}
                 end
             end
         end
     end
 
-    return {}
+    return {nil, nil}
 end
 
+function gameEntityMap:getLocalEnemies(startNode, towerNode)
+    if distanceAlgorithm(startNode, towerNode) == 1 then
+        return "tower"
+    end
+
+    for a = 1,4 do
+        local i, j
+
+        i = -1+ math.floor(a / 2)
+        j = 1 - math.fmod(a,3)
+
+        if i+startNode[2] >= 1 and i+startNode[2] <= tl.height and j+startNode[1] >= 1 and j+startNode[1] <= tl.width then
+            if self[i+startNode[2]][j+startNode[1]] then
+                if self[i+startNode[2]][j+startNode[1]].gameEntity.team == not self[startNode[2]][startNode[1]].gameEntity.team then
+                    return {j+startNode[1], i+startNode[2]}
+                end
+            end
+        end
+    end
+end
+
+function gameEntityMap:updateHealth(x,y,damage)
+    self[y][x].gameEntity.health = self[y][x].gameEntity.health - damage
+
+    if self[y][x].gameEntity.health > 0 then
+        world:removeEntity(self[y][x])
+    end
+end
+
+
 function placeEntity(index, posX, posY, side)
-    print("Placing entity at ", posX, posY)
+    print("Placing entity at ", posX, posY, index)
     local newEntity = concord.entity(world)
     :give("gameEntity", index, posX, posY, side)
     :give("drawable", "image", 5,{purchasableEntities[index].image, tl.size/tl.defaultImageSize})
@@ -564,7 +737,6 @@ function purchaseMode(args)
     gameStates.purchaseMode = enabled
 
     if enabled then
-        print("yo")
         placeBox:give("pos", 0, 0)
     else
         placeBox:give("pos", 1200, 1200)
