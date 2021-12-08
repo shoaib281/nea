@@ -8,6 +8,18 @@ local networking
 
 local socket = require "socket"
 
+local layers = {{},{},{},{},{},{}}
+local gameEntityMap = {}
+local myTeamEntities = {}
+local enemyTeamEntities = {}
+local inputs = {"right", "left"}
+
+local world = concord.world()
+local highlightEntity
+local readyToPlaceEntity
+local placeBox
+local popupDescriptionEntity
+
 local cl = {
     default = {1,1,1,1},
     loadoutBackgroundColor = {0,1,0},
@@ -73,7 +85,8 @@ local purchasableEntities = {
         price = 10,
         name = "tower target",
         pathfind = "tower",
-        attackStyle = "melee",
+        attack = "melee",
+        attackSpeed = 1.5,
         damage = -5,
         maxHealth = 100
     },
@@ -81,7 +94,8 @@ local purchasableEntities = {
         price = 11,
         name = "enemy target",
         pathfind = "enemies",
-        attackStyle = "melee",
+        attack = "melee",
+        attackSpeed = 1.5,
         damage = -5,
         maxHealth = 100
     },
@@ -89,25 +103,30 @@ local purchasableEntities = {
         price = 12,
         name = "enemy target shoot",
         pathfind = "enemies",
-        attackStyle = "ranged",
-        range = 4,
+        attack = "ranged",
+        attackSpeed = 1.5,
+        attackRange = 4,
         damage = -3,
         maxHealth = 100
     },
     {
         price = 13,
-        name = "descartes",
+        name = "tower target regen",
         pathfind = "tower",
-        effects = "regenerate",
-        range = 4,
+        attack = "melee",
+        attackSpeed = 1.5,
+        effect = "regenerate",
+        effeectValue = 20,
+        effectRange = 4,
+        damage = -5,
         maxHealth = 100
     },
     {
         price = 14,
         name = "nietszche",
-        pathfind = "stationary",
-        attackStyle = "ranged",
-        range = 4,
+        attack = "ranged",
+        attackSpeed = 1.5,
+        attackRange = 4,
         damage = -30,
         maxHealth = 100
     },
@@ -115,78 +134,75 @@ local purchasableEntities = {
         price = 15,
         name = "rousseau",
         pathfind = "tower",
-        attackStyle = "melee",
-        range = 4,
-        damage = -30,
+        effect = "generate money",
+        effectValue = 20,
+        effectInterval = 1,
         maxHealth = 100
     },
     {
         price = 16,
         name = "sartre",
-        pathfind = "potion",
-        attackStyle = "damage",
-        range = 4,
-        damage = -30
+        effect = "damage",
+        effectValue = 100,
+        effectRange = 4,
+        duration = 1
     },
     {
         price = 17,
         name = "foccault",
-        pathfind = "potion",
-        attackStyle = "heal",
-        range = 4,
-        damage = 30
+        effect = "heal",
+        effectRange = 4,
+        effectValue = 100,
+        duration = 1
     },
     {
         price = 18,
         name = "schopen",
-        pathfind = "potion",
-        attackStyle = "freeze",
-        range = 4,
-        duration = 4
+        effect = "regen",
+        effectValue = 20,
+        effectRange = 4,
+        effectInterval = 2,
+        duration = 10,
     },
     {
         price = 19,
         name = "camus",
-        pathfind = "potion",
-        attackStyle = "poison",
-        range = 4,
-        duration = 4,
-        damage = -15
+        effect = "poison",
+        effectValue = 20,
+        effectRange = 4,
+        effectInterval = 2,
+        duration = 10,
     },
     {
         price = 20,
         name = "voltaire",
-        pathfind = "stationary",
         maxHealth = 100
     },
     {
         price = 5,
         name = "cheap wall",
-        pathfind = "stationary",
         maxHealth = 20
     },
     {
         price = 22,
         name = "locke",
-        pathfind = "stationary",
-        attackStyle = "thorns",
-        damage = -15,
+        thorns = 10,
         maxHealth = 100
     },
     {
         price = 23,
         name = "hegel",
-        pathfind = "stationary",
-        attackStyle = "money",
-        damage = 30,
+        effect = "generate money",
+        effectValue = 20,
+        effectInterval = 1,
         maxHealth = 100
     },
     {
         price = 24,
         name = "aquinas",
-        pathfind = "stationary",
-        attackStyle = "health",
-        damage = 30,
+        effect = "regen tower",
+        effectValue = 20,
+        effectInterval = 1,
         maxHealth = 100
     }
 }
@@ -214,18 +230,6 @@ local fonts = {
     small = love.graphics.newFont(22),
     verySmall = love.graphics.newFont(16)
 }
-
-local layers = {{},{},{},{},{},{}}
-local gameEntityMap = {}
-local myTeamEntities = {}
-local enemyTeamEntities = {}
-local inputs = {"right", "left"}
-
-local world = concord.world()
-local highlightEntity
-local readyToPlaceEntity
-local placeBox
-local popupDescriptionEntity
 
 concord.component("highlightOnMouse")
 
@@ -277,31 +281,54 @@ concord.component("button", function(sf, x, y, width, height, func, args)
 end)
 
 concord.component("gameEntity", function(sf, index, xLoc, yLoc, side)
-    local maxHealth = purchasableEntities[index].maxHealth
-    local attackStyle = purchasableEntities[index].attackStyle
-
     sf.index = index
     sf.xLoc = xLoc
     sf.yLoc = yLoc
     sf.team = side
-    sf.health = maxHealth
-    sf.maxHealth = maxHealth
-    sf.attackStyle = attackStyle
 end)
 
-concord.component("ranged", function(sf, target)
-    sf.target = target
+concord.component("pathfind", function(sf, pathfind)
+    sf.target = pathfind
 end)
 
+concord.component("attack", function(sf, attack, damage, speed)
+    sf.method = attack
+    sf.damage = damage
+    sf.speed = speed
+end)
+
+concord.component("attackRange", function(sf, attackRange)
+    sf.range = attackRange
+end)
+
+concord.component("health", function(sf, health)
+    sf.hp = health
+    sf.maxHealth = health
+end)
+
+concord.component("effect", function(sf, effect, effectValue)
+    sf.effect = effect
+    sf.value = effectValue
+end)
+
+concord.component("effectRange", function(sf, effectRange)
+    sf.range = effectRange
+end)
+
+concord.component("recurringEffect", function(sf, interval)
+    sf.interval = interval
+    sf.timeSince = 0
+end)
 concord.component("popupDescription")
-concord.component("reachedTower")
 
 local gameSystem = concord.system({
     gameEntities = {"gameEntity"},
+    pathfinders = {"pathfind"},
+    attackers = {"attack"}
 })
 
 local drawUI = concord.system({
-    drawables = {"drawable"}
+    drawables = {"drawable"},
 })
 
 local buttonSystem = concord.system({
@@ -359,69 +386,66 @@ function gameSystem:update(dt)
     if totalDt > .2 then
         totalDt = 0
 
-        for _, baseGameEntity in ipairs(self.gameEntities) do
-
-            local pathfindMode = purchasableEntities[baseGameEntity.gameEntity.index].pathfind
-            local endNode = {1, tl.height/2}
-
-            if not baseGameEntity.gameEntity.team then
-                endNode[1] = tl.width     
+        -- pathfind first
+        for _, bge in ipairs(self.pathfinders) do
+            local pfMode = bge.pathfind.target
+            
+            local towerNode = {1, tl.height/2}
+            if not bge.gameEntity.team then
+                towerNode[1] = tl.width     
             end
+            
 
             local posX, posY
 
-            if pathfindMode == "tower" then
+            if pfMode == "tower" then
                 posX, posY = unpack(
-                    gameEntityMap:pathfindForTower({baseGameEntity.gameEntity.xLoc, baseGameEntity.gameEntity.yLoc}, endNode)
+                    gameEntityMap:pathfindForTower({bge.gameEntity.xLoc, bge.gameEntity.yLoc}, towerNode)
                 )
-            elseif pathfindMode == "enemies" then
+            elseif pfMode == "enemies" then
                 posX, posY = unpack(
-                    gameEntityMap:pathfindForEnemy({baseGameEntity.gameEntity.xLoc, baseGameEntity.gameEntity.yLoc}, endNode, baseGameEntity.gameEntity.team)
+                    gameEntityMap:pathfindForEnemy({bge.gameEntity.xLoc, bge.gameEntity.yLoc}, towerNode, bge.gameEntity.team)
                 )
             end
 
             if posX then
-                gameEntityMap[baseGameEntity.gameEntity.yLoc][baseGameEntity.gameEntity.xLoc] = nil
+                gameEntityMap[bge.gameEntity.yLoc][bge.gameEntity.xLoc] = nil
 
-                baseGameEntity.gameEntity.xLoc = posX
-                baseGameEntity.gameEntity.yLoc = posY
-                baseGameEntity.pos.x = (posX-1) * tl.size
-                baseGameEntity.pos.y = (posY-1) * tl.size
+                bge.gameEntity.xLoc = posX
+                bge.gameEntity.yLoc = posY
+                bge.pos.x = (posX-1) * tl.size
+                bge.pos.y = (posY-1) * tl.size
 
-                gameEntityMap[posY][posX] = baseGameEntity
+                gameEntityMap[posY][posX] = bge
             end
         end
 
-        for _, baseGameEntity in ipairs(self.gameEntities) do
-            local towerNode = {1, tl.height/2}
-
-            if not baseGameEntity.gameEntity.team then
-                towerNode[1] = tl.width     
-            end
-
+        -- then attackers
+        for _, bge in ipairs(self.attackers) do
             local enemyEntity
             local ranged
 
-            if purchasableEntities[baseGameEntity.gameEntity.index].attackStyle == "melee" then
-                enemyEntity = gameEntityMap:getLocalEnemies({baseGameEntity.gameEntity.xLoc, baseGameEntity.gameEntity.yLoc}, towerNode)
-            elseif purchasableEntities[baseGameEntity.gameEntity.index].attackStyle == "ranged" then
-                ranged = true
-                local index = baseGameEntity.gameEntity.index
-                local range = purchasableEntities[index].range
-                enemyEntity = gameEntityMap:rangedGetLocalEnemies({baseGameEntity.gameEntity.xLoc, baseGameEntity.gameEntity.yLoc}, towerNode, baseGameEntity.gameEntity.team, range)
+            local towerNode = {1, tl.height/2}
+            if not bge.gameEntity.team then
+                towerNode[1] = tl.width     
             end
 
-            if enemyEntity then                    
-                local index = baseGameEntity.gameEntity.index
-                local damage = purchasableEntities[index].damage
-                local team = baseGameEntity.gameEntity.team
+            if bge.attack.method == "melee" then
+                enemyEntity = gameEntityMap:getLocalEnemies({bge.gameEntity.xLoc, bge.gameEntity.yLoc}, towerNode)
+            elseif bge.attack.method == "ranged" then
+                ranged = bge.attackRange.range
+                
+                enemyEntity = gameEntityMap:rangedGetLocalEnemies({bge.gameEntity.xLoc, bge.gameEntity.yLoc}, towerNode, bge.gameEntity.team, ranged)
+            end
 
+            if enemyEntity then
+                local damage = bge.attack.damage
                 if enemyEntity == "tower" then
-                    game:updateHealth(team == game.side, damage)
+                    game:updateHealth(team==game.side, damage)
                 else
                     gameEntityMap:updateHealth(enemyEntity[1], enemyEntity[2], damage)
                     if ranged then
-                        local lineCoords = {(baseGameEntity.gameEntity.xLoc-0.5)*tl.size, (baseGameEntity.gameEntity.yLoc-0.5)*tl.size, (enemyEntity[1]-0.5)*tl.size, (enemyEntity[2]-0.5)*tl.size}
+                        local lineCoords = {(bge.gameEntity.xLoc-0.5)*tl.size, (bge.gameEntity.yLoc-0.5)*tl.size, (enemyEntity[1]-0.5)*tl.size, (enemyEntity[2]-0.5)*tl.size}
                         local lineEntity = concord.entity(world)
                         :give("drawable", "line", 6, {lineCoords, cl.red})
                         :give("garbage", 0.1)
@@ -763,16 +787,14 @@ function gameEntityMap:rangedGetLocalEnemies(startNode, towerNode, team, range)
     end
 end
 
-
 function gameEntityMap:updateHealth(x,y,damage)
 
-    self[y][x].gameEntity.health = self[y][x].gameEntity.health + damage
+    self[y][x].health.hp = self[y][x].health.hp + damage
     
-    if self[y][x].gameEntity.health < 0 then
+    if self[y][x].health.hp < 0 then
         world:removeEntity(self[y][x])
     end
 end
-
 
 function placeEntity(index, posX, posY, side)
     print("Placing entity at ", posX, posY, index)
@@ -780,6 +802,44 @@ function placeEntity(index, posX, posY, side)
     :give("gameEntity", index, posX, posY, side)
     :give("drawable", "image", 5,{purchasableEntities[index].image, tl.size/tl.defaultImageSize})
     :give("pos", (posX-1) * tl.size, (posY-1) * tl.size)
+
+    local purchasedItem = purchasableEntities[index]
+
+    if purchasedItem.pathfind then
+        newEntity:give("pathfind",purchasedItem.pathfind)
+    end
+
+    if purchasedItem.attack then
+        newEntity:give("attack", purchasedItem.attack, purchasedItem.damage, purchasedItem.attackSpeed)
+    end
+
+    if purchasedItem.attackRange then
+        newEntity:give("attackRange", purchasedItem.attackRange)
+    end
+
+    if purchasedItem.maxHealth then
+        newEntity:give("health", purchasedItem.maxHealth)
+    end
+
+    if purchasedItem.effect then
+        newEntity:give("effect", purchasedItem.effect, purchasedItem.effectValue)
+    end
+
+    if purchasedItem.effectRange then
+        newEntity:give("effectRange", purchasedItem.effectRange)
+    end
+
+    if purchasedItem.recurringEffect then
+        newEntity:give("recurringEffect", purchasedItem.effectInterval)
+    end
+
+    if purchasedItem.duration then
+        newEntity:give("garbage", purchasedItem.duration)
+    end
+
+    if purchasedItem.thorns then
+        newEntity:give("thorns", purchasedItem.thorns)
+    end
 end
 
 function game:updateHealth(team, amount)
