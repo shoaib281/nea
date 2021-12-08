@@ -35,6 +35,7 @@ local cl = {
     buttonHighlight = {0,0,0,0.5},
     black = {0,0,0},
     red = {1,0,0},
+    green = {0,1,0},
     transBorder = {1,0,0,0.5}
 }
 
@@ -245,9 +246,15 @@ concord.component("drawable", function(sf, type, layer, args)
     sf.layer = layer
 
     if type == "rectangle" then
-        width, height, color, fillType = unpack(args)
+        local width, height, color, fillType = unpack(args)
         sf.width = width
         sf.height = height
+        sf.color = color
+        sf.fillType = fillType
+    elseif type == "circle" then
+        print("asdfasd")
+        local radius, color, fillType = unpack(args)    
+        sf.radius = radius
         sf.color = color
         sf.fillType = fillType
     elseif type == "canvas" then
@@ -324,6 +331,8 @@ concord.component("recurringEffect", function(sf, interval)
 end)
 concord.component("popupDescription")
 
+concord.component("fader")
+
 local gameSystem = concord.system({
     gameEntities = {"gameEntity"},
     pathfinders = {"pathfind"},
@@ -343,6 +352,10 @@ local buttonSystem = concord.system({
 
 local garbageSystem = concord.system({
     garbage = {"garbage"},
+})
+
+local fadeSystem = concord.system({
+    faders = {"drawable", "fader", "garbage"}
 })
 
 function drawUI:init()
@@ -450,13 +463,17 @@ function gameSystem:update(dt)
                         game:updateHealth(team==game.side, damage)
                     else
                         gameEntityMap:updateHealth(enemyEntity[1], enemyEntity[2], damage)
-                        if ranged then
+                        if false then
                             local lineCoords = {(bge.gameEntity.xLoc-0.5)*tl.size, (bge.gameEntity.yLoc-0.5)*tl.size, (enemyEntity[1]-0.5)*tl.size, (enemyEntity[2]-0.5)*tl.size}
                             local lineEntity = concord.entity(world)
                             :give("drawable", "line", 6, {lineCoords, cl.red})
                             :give("garbage", 0.1)
                         end
                     end
+                    local lineCoords = {(bge.gameEntity.xLoc-0.5)*tl.size, (bge.gameEntity.yLoc-0.5)*tl.size, (enemyEntity[1]-0.5)*tl.size, (enemyEntity[2]-0.5)*tl.size}
+                    local lineEntity = concord.entity(world)
+                    :give("drawable", "line", 6, {lineCoords, cl.red})
+                    :give("garbage", 0.1)
                 end
             end
         end
@@ -472,13 +489,16 @@ function gameSystem:update(dt)
             local yloc = bge.gameEntity.yLoc
             
             local iterationGroup
+            local colour
 
             if effect == "damage" then
                 iterationGroup = gameEntityMap:getSortedListOfEnemies({xloc, yloc}, team)
                 value = -value
+                colour = cl.red
                 
             elseif effect == "heal" then
                 iterationGroup = gameEntityMap:getSortedListOfEnemies({xloc, yloc}, not team)
+                colour = cl.green
             end
             for _, v in ipairs(iterationGroup) do
                 if v[2].health then
@@ -489,6 +509,11 @@ function gameSystem:update(dt)
                     end
                 end
             end
+            local newEntity = concord.entity(world)
+            :give("drawable", "circle",6,  {range * tl.size/2.3, colour, "fill"})
+            :give("pos", (xloc - 0.5) * tl.size, (yloc - 0.5) * tl.size)
+            :give("fader")
+            :give("garbage", 1)
             world:removeEntity(bge)
         end
     end
@@ -502,6 +527,14 @@ function garbageSystem:update(dt)
         if garbage.garbage.time > garbage.garbage.maxTime then
             world:removeEntity(garbage)
         end
+    end
+end
+
+function fadeSystem:update(dt)
+    for _, bge in ipairs(self.faders) do
+        print("yo", unpack(bge.drawable.color))
+        local transparency = 1-(bge.garbage.time/bge.garbage.maxTime)
+        bge.drawable.color = {bge.drawable.color[1], bge.drawable.color[2], bge.drawable.color[3], transparency}
     end
 end
 
@@ -577,6 +610,10 @@ function drawUI:draw()
                 love.graphics.setColor(entity.drawable.color)
                 love.graphics.rectangle(entity.drawable.fillType, entity.pos.x, entity.pos.y, entity.drawable.width, entity.drawable.height)
                 love.graphics.setColor(cl.default)
+            elseif entity.drawable.type == "circle" then
+                love.graphics.setColor(entity.drawable.color)
+                love.graphics.circle(entity.drawable.fillType, entity.pos.x + tl.xOffset, entity.pos.y, entity.drawable.radius)
+                love.graphics.setColor(cl.default)
             elseif entity.drawable.type == "canvas" then
                 love.graphics.draw(entity.drawable.canvas, entity.pos.x, entity.pos.y)
             elseif entity.drawable.type == "image" then
@@ -586,6 +623,8 @@ function drawUI:draw()
                 love.graphics.setLineWidth(1)
                 love.graphics.line(entity.drawable.xOne + tl.xOffset, entity.drawable.yOne, entity.drawable.xTwo + tl.xOffset, entity.drawable.yTwo)
                 love.graphics.setColor(cl.default)
+            
+            
             end
         end
     end
@@ -953,6 +992,7 @@ function chooseAloadout(args)
     world:addEntity(readyToPlaceEntity)
     world:addEntity(placeBox)
     world:addSystems(gameSystem)
+    world:addSystems(fadeSystem)
 
     loadoutNumber = unpack(args)
     gameStates.loadoutChosen = loadoutNumber
