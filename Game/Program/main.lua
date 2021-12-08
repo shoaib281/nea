@@ -461,6 +461,7 @@ function gameSystem:update(dt)
                     local damage = bge.attack.damage
                     if enemyEntity == "tower" then
                         game:updateHealth(team==game.side, damage)
+                        enemyEntity = towerNode
                     else
                         gameEntityMap:updateHealth(enemyEntity[1], enemyEntity[2], damage)
                         if false then
