@@ -328,9 +328,9 @@ function gameSystem:init()
         gameEntityMap[ge.yLoc][ge.xLoc] = nil
 
         if ge.team == game.side then
-            myTeamEntities[entity] = false
+            myTeamEntities[entity] = nil
         else
-            enemyTeamEntities[entity] = false
+            enemyTeamEntities[entity] = nil
         end
     end
 end
@@ -357,16 +357,17 @@ function gameSystem:update(dt)
                 posX, posY = unpack(
                     gameEntityMap:pathfindForTower({baseGameEntity.gameEntity.xLoc, baseGameEntity.gameEntity.yLoc}, endNode)
                 )
-            elseif pathfind == "enemy" then
+            elseif pathfindMode == "enemies" then
                 posX, posY = unpack(
-                    gameEntityMap:pathfindForEnemy({baseGameEntity.gameEntity.xLoc, baseGameEntity.gameEntity.yLoc})
+                    gameEntityMap:pathfindForEnemy({baseGameEntity.gameEntity.xLoc, baseGameEntity.gameEntity.yLoc}, endNode, baseGameEntity.gameEntity.team)
                 )
             end
 
             if posX then
                 gameEntityMap[baseGameEntity.gameEntity.yLoc][baseGameEntity.gameEntity.xLoc] = nil
 
-                baseGameEntity:give("gameEntity", baseGameEntity.gameEntity.index, posX, posY, baseGameEntity.gameEntity.team)
+                baseGameEntity.gameEntity.xLoc = posX
+                baseGameEntity.gameEntity.yLoc = posY
                 baseGameEntity.pos.x = (posX-1) * tl.size
                 baseGameEntity.pos.y = (posY-1) * tl.size
 
@@ -385,7 +386,7 @@ function gameSystem:update(dt)
 
                 local enemyEntity = gameEntityMap:getLocalEnemies({baseGameEntity.gameEntity.xLoc, baseGameEntity.gameEntity.yLoc}, towerNode)
 
-                if enemyEntity then
+                if enemyEntity then                    
                     local index = baseGameEntity.gameEntity.index
                     local damage = purchasableEntities[index].damage
                     local team = baseGameEntity.gameEntity.team
@@ -515,7 +516,7 @@ function bubbleSortEnemies(array)
 
         for index, value in ipairs(array) do
             if array[index + 1] then
-                if value[2] > array[index + 1][2] then
+                if value[1] > array[index + 1][1] then
                     local temp = value
                     array[index] = array[index + 1]
                     array[index + 1] = temp
@@ -530,35 +531,42 @@ function bubbleSortEnemies(array)
     return array
 end
 
-function gameEntityMap:pathfindForEnemy(startNode)
+function gameEntityMap:pathfindForEnemy(startNode, endNode, team)
     local tempArray = {}
     
-    for key, value in pairs(enemyTeamEntities) do
-        local distance = distanceAlgorithm(startNode, {key.gameEntities.xLoc, key.gameEntities.yLoc})
+    local pathfindGroup
 
-        table.insert({tempArray, distance}, key)
+    if team ~= game.side then -- enemy team
+        pathfindGroup = myTeamEntities
+    else
+        pathfindGroup = enemyTeamEntities
     end
 
 
+    for key, value in pairs(pathfindGroup) do
+        local distance = distanceAlgorithm(startNode, {key.gameEntity.xLoc, key.gameEntity.yLoc})
+        if distance == 1 then
+            return startNode
+        end
+        table.insert(tempArray, {distance, key})
+    end
 
     local sortedListOfEnemies = bubbleSortEnemies(tempArray)
 
     for _,enemy in ipairs(sortedListOfEnemies) do
-        local posX, posY = unpack(gameEntityMap:pathfind(startNode, {enemy[1].gameEntities.xLoc, enemy[1].gameEntities.yLoc}))
-
+        local posX, posY = unpack(gameEntityMap:pathfind(startNode, {enemy[2].gameEntity.xLoc, enemy[2].gameEntity.yLoc}))
         if posX then 
             return {posX, posY}
         end
     end
 
     -- no possible way to enemies or no enemies
-
-    return gameEntityMap:moveToTower(startNode)
+    local posX, posY = unpack(gameEntityMap:pathfindForTower(startNode, endNode))
+    return {posX, posY}
 end
 
 function gameEntityMap:pathfind(startNode, endNode) -- already |found path| no path
     local distance = distanceAlgorithm(startNode, endNode)
-
     if distance == 1 then
         return {nil, nil, true}
     end
@@ -577,15 +585,14 @@ function gameEntityMap:pathfind(startNode, endNode) -- already |found path| no p
         end
     end
 
-    tempMap[startNode[2]][startNode[1]] = {}
-    tempMap[startNode[2]][startNode[1]].gCost = 0
-    tempMap[startNode[2]][startNode[1]].hCost = distance
-    tempMap[startNode[2]][startNode[1]].fCost = distance
-
+    --tempMap[startNode[2]][startNode[1]] = {}
+    --tempMap[startNode[2]][startNode[1]].gCost = 0
+    --tempMap[startNode[2]][startNode[1]].hCost = distance
+    --tempMap[startNode[2]][startNode[1]].fCost = distance
     
     tempMap[endNode[2]][endNode[1]] = nil
 
-    local bestNode = {startNode[1], startNode[2],tempMap[startNode[2]][startNode[1]].fCost}
+    local bestNode = {startNode[1], startNode[2],distance}
 
     repeat 
         tempMap[bestNode[2]][bestNode[1]] = "closed"
@@ -692,9 +699,10 @@ function gameEntityMap:getLocalEnemies(startNode, towerNode)
 end
 
 function gameEntityMap:updateHealth(x,y,damage)
-    self[y][x].gameEntity.health = self[y][x].gameEntity.health - damage
 
-    if self[y][x].gameEntity.health > 0 then
+    self[y][x].gameEntity.health = self[y][x].gameEntity.health + damage
+    
+    if self[y][x].gameEntity.health < 0 then
         world:removeEntity(self[y][x])
     end
 end
