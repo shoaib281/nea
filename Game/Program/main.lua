@@ -82,7 +82,7 @@ local purchasableEntities = {
         name = "enemy target",
         pathfind = "enemies",
         attackStyle = "melee",
-        damage = -30,
+        damage = -5,
         maxHealth = 100
     },
     {
@@ -522,7 +522,7 @@ function drawUI:draw()
             elseif entity.drawable.type == "line" then
                 love.graphics.setColor(entity.drawable.color)
                 love.graphics.setLineWidth(1)
-                love.graphics.line(entity.drawable.xOne, entity.drawable.yOne, entity.drawable.xTwo, entity.drawable.yTwo)
+                love.graphics.line(entity.drawable.xOne + tl.xOffset, entity.drawable.yOne, entity.drawable.xTwo + tl.xOffset, entity.drawable.yTwo)
                 love.graphics.setColor(cl.default)
             end
         end
@@ -607,12 +607,13 @@ function gameEntityMap:pathfindForEnemy(startNode, endNode, team)
 
 
     for _,enemy in ipairs(sortedListOfEnemies) do
-        local posX, posY = unpack(gameEntityMap:pathfind(startNode, {enemy[2].gameEntity.xLoc, enemy[2].gameEntity.yLoc}))
+        local posX, posY, reached = unpack(gameEntityMap:pathfind(startNode, {enemy[2].gameEntity.xLoc, enemy[2].gameEntity.yLoc}))
         if posX then 
             return {posX, posY}
+        elseif reached then
+            return startNode
         end
     end
-
     -- no possible way to enemies or no enemies
     local posX, posY = unpack(gameEntityMap:pathfindForTower(startNode, endNode))
     return {posX, posY}
@@ -637,11 +638,6 @@ function gameEntityMap:pathfind(startNode, endNode) -- already |found path| no p
             tempMap[yPos][xPos] = "wagwan"
         end
     end
-
-    --tempMap[startNode[2]][startNode[1]] = {}
-    --tempMap[startNode[2]][startNode[1]].gCost = 0
-    --tempMap[startNode[2]][startNode[1]].hCost = distance
-    --tempMap[startNode[2]][startNode[1]].fCost = distance
     
     tempMap[endNode[2]][endNode[1]] = nil
 
