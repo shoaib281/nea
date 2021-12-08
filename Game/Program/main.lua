@@ -71,7 +71,7 @@ local loadouts = {
 local purchasableEntities = {
     {
         price = 10,
-        name = "shoaib",
+        name = "tower target",
         pathfind = "tower",
         attackStyle = "melee",
         damage = -5,
@@ -79,7 +79,7 @@ local purchasableEntities = {
     },
     {
         price = 11,
-        name = "kant",
+        name = "enemy target",
         pathfind = "enemies",
         attackStyle = "melee",
         damage = -30,
@@ -87,11 +87,11 @@ local purchasableEntities = {
     },
     {
         price = 12,
-        name = "leibniz",
+        name = "enemy target shoot",
         pathfind = "enemies",
         attackStyle = "ranged",
         range = 4,
-        damage = -30,
+        damage = -3,
         maxHealth = 100
     },
     {
@@ -161,7 +161,7 @@ local purchasableEntities = {
     },
     {
         price = 5,
-        name = "witttein",
+        name = "cheap wall",
         pathfind = "stationary",
         maxHealth = 20
     },
@@ -251,7 +251,20 @@ concord.component("drawable", function(sf, type, layer, args)
         image, scale = unpack(args)
         sf.image = image
         sf.scale = scale
+    elseif type == "line" then
+        local lineCoords, color = unpack(args)
+        local xOne, yOne, xTwo, yTwo = unpack(lineCoords)
+        sf.xOne = xOne
+        sf.xTwo = xTwo
+        sf.yOne = yOne
+        sf.yTwo = yTwo
+        sf.color = color
     end
+end)
+
+concord.component("garbage", function(sf, maxTime)
+    sf.time = 0
+    sf.maxTime = maxTime
 end)
 
 concord.component("button", function(sf, x, y, width, height, func, args)
@@ -288,13 +301,17 @@ local gameSystem = concord.system({
 })
 
 local drawUI = concord.system({
-    drawables = {"pos", "drawable"}
+    drawables = {"drawable"}
 })
 
 local buttonSystem = concord.system({
     buttons = {"button"},
     highlightables = {"button", "highlightOnMouse"},
     popups = {"popupDescription"}
+})
+
+local garbageSystem = concord.system({
+    garbage = {"garbage"},
 })
 
 function drawUI:init()
@@ -382,22 +399,46 @@ function gameSystem:update(dt)
                 towerNode[1] = tl.width     
             end
 
+            local enemyEntity
+            local ranged
+
             if purchasableEntities[baseGameEntity.gameEntity.index].attackStyle == "melee" then
+                enemyEntity = gameEntityMap:getLocalEnemies({baseGameEntity.gameEntity.xLoc, baseGameEntity.gameEntity.yLoc}, towerNode)
+            elseif purchasableEntities[baseGameEntity.gameEntity.index].attackStyle == "ranged" then
+                ranged = true
+                local index = baseGameEntity.gameEntity.index
+                local range = purchasableEntities[index].range
+                enemyEntity = gameEntityMap:rangedGetLocalEnemies({baseGameEntity.gameEntity.xLoc, baseGameEntity.gameEntity.yLoc}, towerNode, baseGameEntity.gameEntity.team, range)
+            end
 
-                local enemyEntity = gameEntityMap:getLocalEnemies({baseGameEntity.gameEntity.xLoc, baseGameEntity.gameEntity.yLoc}, towerNode)
+            if enemyEntity then                    
+                local index = baseGameEntity.gameEntity.index
+                local damage = purchasableEntities[index].damage
+                local team = baseGameEntity.gameEntity.team
 
-                if enemyEntity then                    
-                    local index = baseGameEntity.gameEntity.index
-                    local damage = purchasableEntities[index].damage
-                    local team = baseGameEntity.gameEntity.team
-
-                    if enemyEntity == "tower" then
-                        game:updateHealth(team == game.side, damage)
-                    else
-                        gameEntityMap:updateHealth(enemyEntity[1], enemyEntity[2], damage)
+                if enemyEntity == "tower" then
+                    game:updateHealth(team == game.side, damage)
+                else
+                    gameEntityMap:updateHealth(enemyEntity[1], enemyEntity[2], damage)
+                    if ranged then
+                        local lineCoords = {(baseGameEntity.gameEntity.xLoc-0.5)*tl.size, (baseGameEntity.gameEntity.yLoc-0.5)*tl.size, (enemyEntity[1]-0.5)*tl.size, (enemyEntity[2]-0.5)*tl.size}
+                        local lineEntity = concord.entity(world)
+                        :give("drawable", "line", 6, {lineCoords, cl.red})
+                        :give("garbage", 0.1)
                     end
                 end
             end
+        end
+    end
+end
+
+function garbageSystem:update(dt)
+    for _, garbage in ipairs(self.garbage) do
+        garbage.garbage.time = garbage.garbage.time + dt
+    end
+    for _, garbage in ipairs(self.garbage) do
+        if garbage.garbage.time > garbage.garbage.maxTime then
+            world:removeEntity(garbage)
         end
     end
 end
@@ -478,6 +519,11 @@ function drawUI:draw()
                 love.graphics.draw(entity.drawable.canvas, entity.pos.x, entity.pos.y)
             elseif entity.drawable.type == "image" then
                 love.graphics.draw(entity.drawable.image, entity.pos.x + tl.xOffset, entity.pos.y, 0,entity.drawable.scale, entity.drawable.scale)
+            elseif entity.drawable.type == "line" then
+                love.graphics.setColor(entity.drawable.color)
+                love.graphics.setLineWidth(1)
+                love.graphics.line(entity.drawable.xOne, entity.drawable.yOne, entity.drawable.xTwo, entity.drawable.yTwo)
+                love.graphics.setColor(cl.default)
             end
         end
     end
@@ -531,7 +577,7 @@ function bubbleSortEnemies(array)
     return array
 end
 
-function gameEntityMap:pathfindForEnemy(startNode, endNode, team)
+function gameEntityMap:getSortedListOfEnemies(startNode, team)
     local tempArray = {}
     
     local pathfindGroup
@@ -546,12 +592,19 @@ function gameEntityMap:pathfindForEnemy(startNode, endNode, team)
     for key, value in pairs(pathfindGroup) do
         local distance = distanceAlgorithm(startNode, {key.gameEntity.xLoc, key.gameEntity.yLoc})
         if distance == 1 then
-            return startNode
+            return {{distance, key}}
         end
         table.insert(tempArray, {distance, key})
     end
 
-    local sortedListOfEnemies = bubbleSortEnemies(tempArray)
+    return bubbleSortEnemies(tempArray)
+
+end
+
+function gameEntityMap:pathfindForEnemy(startNode, endNode, team)
+
+    local sortedListOfEnemies = self:getSortedListOfEnemies(startNode, team)
+
 
     for _,enemy in ipairs(sortedListOfEnemies) do
         local posX, posY = unpack(gameEntityMap:pathfind(startNode, {enemy[2].gameEntity.xLoc, enemy[2].gameEntity.yLoc}))
@@ -698,6 +751,23 @@ function gameEntityMap:getLocalEnemies(startNode, towerNode)
     end
 end
 
+function gameEntityMap:rangedGetLocalEnemies(startNode, towerNode, team, range)
+    local sortedListOfEnemies = self:getSortedListOfEnemies(startNode, team)
+
+    local endEnemy = sortedListOfEnemies[1]
+    if endEnemy then
+        local endNode = {endEnemy[2].gameEntity.xLoc, endEnemy[2].gameEntity.yLoc}
+        if endEnemy[1] <= range then
+            return endNode
+        end
+    end
+
+    if distanceAlgorithm(startNode, towerNode) ==  1 then
+        return "tower"
+    end
+end
+
+
 function gameEntityMap:updateHealth(x,y,damage)
 
     self[y][x].gameEntity.health = self[y][x].gameEntity.health + damage
@@ -726,6 +796,7 @@ end
 
 world:addSystems(drawUI)
 world:addSystems(buttonSystem)
+world:addSystems(garbageSystem)
 
 highlightEntity = concord.entity(world)
 :give("pos", 1200,1200)
