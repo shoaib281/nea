@@ -45,7 +45,9 @@ local game = {
     side = false, -- starts on the left
     cash = 1000,
     health = 1000,
-    enemyHealth = 1000
+    enemyHealth = 1000,
+    pfInterval = 1,
+    pfSpeed = 0
 }
 
 local gameStates = {
@@ -295,6 +297,7 @@ concord.component("attack", function(sf, attack, damage, speed)
     sf.method = attack
     sf.damage = damage
     sf.speed = speed
+    sf.toHit = 0
 end)
 
 concord.component("attackRange", function(sf, attackRange)
@@ -324,7 +327,8 @@ concord.component("popupDescription")
 local gameSystem = concord.system({
     gameEntities = {"gameEntity"},
     pathfinders = {"pathfind"},
-    attackers = {"attack"}
+    attackers = {"attack"},
+    effects = {"effect"}
 })
 
 local drawUI = concord.system({
@@ -379,12 +383,10 @@ function gameSystem:init()
     end
 end
 
-local totalDt = 0
-
 function gameSystem:update(dt)
-    totalDt = totalDt + dt
-    if totalDt > .2 then
-        totalDt = 0
+    game.pfSpeed = game.pfSpeed + dt
+    if game.pfSpeed > game.pfInterval then
+        game.pfSpeed = 0
 
         -- pathfind first
         for _, bge in ipairs(self.pathfinders) do
@@ -419,39 +421,75 @@ function gameSystem:update(dt)
                 gameEntityMap[posY][posX] = bge
             end
         end
+    end
 
-        -- then attackers
-        for _, bge in ipairs(self.attackers) do
-            local enemyEntity
-            local ranged
+    for _, bge in ipairs(self.attackers) do
+        if gameEntityMap[bge.gameEntity.yLoc][bge.gameEntity.xLoc] then 
+            bge.attack.toHit = bge.attack.toHit + dt
+            if bge.attack.toHit > bge.attack.speed then
+                bge.attack.toHit = 0
+                local enemyEntity
+                local ranged
 
-            local towerNode = {1, tl.height/2}
-            if not bge.gameEntity.team then
-                towerNode[1] = tl.width     
-            end
+                local towerNode = {1, tl.height/2}
+                if not bge.gameEntity.team then
+                    towerNode[1] = tl.width     
+                end
 
-            if bge.attack.method == "melee" then
-                enemyEntity = gameEntityMap:getLocalEnemies({bge.gameEntity.xLoc, bge.gameEntity.yLoc}, towerNode)
-            elseif bge.attack.method == "ranged" then
-                ranged = bge.attackRange.range
-                
-                enemyEntity = gameEntityMap:rangedGetLocalEnemies({bge.gameEntity.xLoc, bge.gameEntity.yLoc}, towerNode, bge.gameEntity.team, ranged)
-            end
+                if bge.attack.method == "melee" then
+                    enemyEntity = gameEntityMap:getLocalEnemies({bge.gameEntity.xLoc, bge.gameEntity.yLoc}, towerNode)
+                elseif bge.attack.method == "ranged" then
+                    ranged = bge.attackRange.range
+                    
+                    enemyEntity = gameEntityMap:rangedGetLocalEnemies({bge.gameEntity.xLoc, bge.gameEntity.yLoc}, towerNode, bge.gameEntity.team, ranged)
+                end
 
-            if enemyEntity then
-                local damage = bge.attack.damage
-                if enemyEntity == "tower" then
-                    game:updateHealth(team==game.side, damage)
-                else
-                    gameEntityMap:updateHealth(enemyEntity[1], enemyEntity[2], damage)
-                    if ranged then
-                        local lineCoords = {(bge.gameEntity.xLoc-0.5)*tl.size, (bge.gameEntity.yLoc-0.5)*tl.size, (enemyEntity[1]-0.5)*tl.size, (enemyEntity[2]-0.5)*tl.size}
-                        local lineEntity = concord.entity(world)
-                        :give("drawable", "line", 6, {lineCoords, cl.red})
-                        :give("garbage", 0.1)
+                if enemyEntity then
+                    local damage = bge.attack.damage
+                    if enemyEntity == "tower" then
+                        game:updateHealth(team==game.side, damage)
+                    else
+                        gameEntityMap:updateHealth(enemyEntity[1], enemyEntity[2], damage)
+                        if ranged then
+                            local lineCoords = {(bge.gameEntity.xLoc-0.5)*tl.size, (bge.gameEntity.yLoc-0.5)*tl.size, (enemyEntity[1]-0.5)*tl.size, (enemyEntity[2]-0.5)*tl.size}
+                            local lineEntity = concord.entity(world)
+                            :give("drawable", "line", 6, {lineCoords, cl.red})
+                            :give("garbage", 0.1)
+                        end
                     end
                 end
             end
+        end
+    end
+
+    for _, bge in ipairs(self.effects) do
+        local effect = bge.effect.effect
+        local value = bge.effect.value
+        if not bge.recurringEffect then
+            local range = bge.effectRange.range
+            local team = bge.gameEntity.team
+            local xloc = bge.gameEntity.xLoc
+            local yloc = bge.gameEntity.yLoc
+            
+            local iterationGroup
+
+            if effect == "damage" then
+                iterationGroup = gameEntityMap:getSortedListOfEnemies({xloc, yloc}, team)
+                value = -value
+                
+            elseif effect == "heal" then
+                iterationGroup = gameEntityMap:getSortedListOfEnemies({xloc, yloc}, not team)
+            end
+            for _, v in ipairs(iterationGroup) do
+                if v[2].health then
+                    if v[1] < range then
+                        gameEntityMap:updateHealth(v[2].gameEntity.xLoc, v[2].gameEntity.yLoc, value)
+                    else
+                        break
+                    end
+                end
+            end
+            world:removeEntity(bge)
         end
     end
 end
@@ -793,6 +831,9 @@ function gameEntityMap:updateHealth(x,y,damage)
     
     if self[y][x].health.hp < 0 then
         world:removeEntity(self[y][x])
+        self[y][x] = nil
+    elseif self[y][x].health.hp > self[y][x].health.maxHealth then
+        self[y][x].health.hp = self[y][x].health.maxHealth
     end
 end
 
@@ -810,7 +851,7 @@ function placeEntity(index, posX, posY, side)
     end
 
     if purchasedItem.attack then
-        newEntity:give("attack", purchasedItem.attack, purchasedItem.damage, purchasedItem.attackSpeed)
+        newEntity:give("attack", purchasedItem.attack, purchasedItem.damage, game.pfInterval * (1/purchasedItem.attackSpeed))
     end
 
     if purchasedItem.attackRange then
