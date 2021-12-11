@@ -107,6 +107,8 @@ class playerFrame():
                     frame.removeAcceptReject()
                     frame.removeInviteButton()
 
+    
+
     def acceptInvite(self): #server
         connection = self.connection
         connection.send(bytes("Accept","utf-8"))

@@ -36,7 +36,8 @@ local cl = {
     black = {0,0,0},
     red = {1,0,0},
     green = {0,1,0},
-    transBorder = {1,0,0,0.5}
+    transBorder = {1,0,0,0.5},
+    grey = {0.3,0.3,0.3}
 }
 
 local game = {
@@ -53,7 +54,8 @@ local game = {
 
 local gameStates = {
     purchaseMode = false,
-    loadoutChosen = false
+    loadoutChosen = false,
+    over = false
 }
 
 local tl = {
@@ -86,7 +88,8 @@ local loadouts = {
 local purchasableEntities = {
     {
         price = 10,
-        name = "tower target",
+        name = "tower attacker",
+        drawable = true,
         pathfind = "tower",
         attack = "melee",
         attackSpeed = 1.5,
@@ -95,7 +98,8 @@ local purchasableEntities = {
     },
     {
         price = 11,
-        name = "enemy target",
+        name = "enemy attacker",
+        drawable = true,
         pathfind = "enemies",
         attack = "melee",
         attackSpeed = 1.5,
@@ -104,7 +108,8 @@ local purchasableEntities = {
     },
     {
         price = 12,
-        name = "enemy target shoot",
+        name = "enemy shooter",
+        drawable = true,
         pathfind = "enemies",
         attack = "ranged",
         attackSpeed = 1.5,
@@ -114,19 +119,22 @@ local purchasableEntities = {
     },
     {
         price = 13,
-        name = "tower target regen",
+        name = "tower attacker local regen",
+        drawable = true,
         pathfind = "tower",
         attack = "melee",
         attackSpeed = 1.5,
-        effect = "regenerate",
-        effeectValue = 20,
+        effect = "regen",
+        effectValue = 20,
         effectRange = 4,
+        effectInterval = 1, 
         damage = -5,
         maxHealth = 100
     },
     {
         price = 14,
-        name = "nietszche",
+        name = "stationary shooter",
+        drawable = true,
         attack = "ranged",
         attackSpeed = 1.5,
         attackRange = 4,
@@ -135,16 +143,20 @@ local purchasableEntities = {
     },
     {
         price = 15,
-        name = "rousseau",
+        name = "bank attacker",
         pathfind = "tower",
+        drawable = true,
         effect = "generate money",
         effectValue = 20,
         effectInterval = 1,
+        attack = "melee",
+        attackSpeed = 1.5,
+        damage = -5,
         maxHealth = 100
     },
     {
         price = 16,
-        name = "sartre",
+        name = "damage potion",
         effect = "damage",
         effectValue = 100,
         effectRange = 4,
@@ -152,7 +164,7 @@ local purchasableEntities = {
     },
     {
         price = 17,
-        name = "foccault",
+        name = "heal potion",
         effect = "heal",
         effectRange = 4,
         effectValue = 100,
@@ -160,7 +172,7 @@ local purchasableEntities = {
     },
     {
         price = 18,
-        name = "schopen",
+        name = "regen potion",
         effect = "regen",
         effectValue = 20,
         effectRange = 4,
@@ -169,7 +181,7 @@ local purchasableEntities = {
     },
     {
         price = 19,
-        name = "camus",
+        name = "poison potion",
         effect = "poison",
         effectValue = 20,
         effectRange = 4,
@@ -178,23 +190,27 @@ local purchasableEntities = {
     },
     {
         price = 20,
-        name = "voltaire",
+        name = "wall",
+        drawable = true,
         maxHealth = 100
     },
     {
         price = 5,
         name = "cheap wall",
+        drawable = true,
         maxHealth = 20
     },
     {
         price = 22,
-        name = "locke",
+        name = "thorny wall",
+        drawable = true,
         thorns = 10,
         maxHealth = 100
     },
     {
         price = 23,
-        name = "hegel",
+        name = "bank",
+        drawable = true,
         effect = "generate money",
         effectValue = 20,
         effectInterval = 1,
@@ -203,7 +219,8 @@ local purchasableEntities = {
     {
         price = 24,
         name = "aquinas",
-        effect = "regen tower",
+        drawable = true,
+        effect = "tower hospital",
         effectValue = 20,
         effectInterval = 1,
         maxHealth = 100
@@ -252,7 +269,6 @@ concord.component("drawable", function(sf, type, layer, args)
         sf.color = color
         sf.fillType = fillType
     elseif type == "circle" then
-        print("asdfasd")
         local radius, color, fillType = unpack(args)    
         sf.radius = radius
         sf.color = color
@@ -307,6 +323,10 @@ concord.component("attack", function(sf, attack, damage, speed)
     sf.toHit = 0
 end)
 
+concord.component("thorns", function(sf, damage)
+    sf.damage = damage
+end)
+
 concord.component("attackRange", function(sf, attackRange)
     sf.range = attackRange
 end)
@@ -327,7 +347,7 @@ end)
 
 concord.component("recurringEffect", function(sf, interval)
     sf.interval = interval
-    sf.timeSince = 0
+    sf.timeSince = interval
 end)
 concord.component("popupDescription")
 
@@ -460,10 +480,11 @@ function gameSystem:update(dt)
                 if enemyEntity then
                     local damage = bge.attack.damage
                     if enemyEntity == "tower" then
+                        local team = bge.gameEntity.team
                         game:updateHealth(team==game.side, damage)
                         enemyEntity = towerNode
                     else
-                        gameEntityMap:updateHealth(enemyEntity[1], enemyEntity[2], damage)
+                        gameEntityMap:updateHealth(enemyEntity[1], enemyEntity[2], damage, bge.gameEntity.xLoc, bge.gameEntity.yLoc)
                         if false then
                             local lineCoords = {(bge.gameEntity.xLoc-0.5)*tl.size, (bge.gameEntity.yLoc-0.5)*tl.size, (enemyEntity[1]-0.5)*tl.size, (enemyEntity[2]-0.5)*tl.size}
                             local lineEntity = concord.entity(world)
@@ -483,39 +504,88 @@ function gameSystem:update(dt)
     for _, bge in ipairs(self.effects) do
         local effect = bge.effect.effect
         local value = bge.effect.value
-        if not bge.recurringEffect then
-            local range = bge.effectRange.range
-            local team = bge.gameEntity.team
-            local xloc = bge.gameEntity.xLoc
-            local yloc = bge.gameEntity.yLoc
-            
-            local iterationGroup
-            local colour
+        local team = bge.gameEntity.team
+        local xloc = bge.gameEntity.xLoc
+        local yloc = bge.gameEntity.yLoc
+        local color 
+        local range
+        if bge.effectRange then
+            range = bge.effectRange.range
+        end
 
-            if effect == "damage" then
-                iterationGroup = gameEntityMap:getSortedListOfEnemies({xloc, yloc}, team)
-                value = -value
-                colour = cl.red
-                
-            elseif effect == "heal" then
-                iterationGroup = gameEntityMap:getSortedListOfEnemies({xloc, yloc}, not team)
-                colour = cl.green
+        local iterationGroup 
+        local towerNode = {1, tl.height/2}
+
+        if effect == "damage" or effect == "poison" then
+            iterationGroup = gameEntityMap:getSortedListOfEnemies({xloc, yloc}, team)
+            value = -value
+            color = cl.red
+            if team == game.side then
+                towerNode[1] = tl.width
             end
-            for _, v in ipairs(iterationGroup) do
-                if v[2].health then
-                    if v[1] < range then
-                        gameEntityMap:updateHealth(v[2].gameEntity.xLoc, v[2].gameEntity.yLoc, value)
-                    else
-                        break
+        elseif effect == "heal" or effect == "regen" then
+            iterationGroup = gameEntityMap:getSortedListOfEnemies({xloc, yloc}, not team)    
+            color = cl.green
+            if team ~= game.side then
+                towerNode[1] = tl.width
+            end
+        end
+
+        if not bge.recurringEffect then 
+            if iterationGroup then      
+                for _, v in ipairs(iterationGroup) do
+                    if v[2].health then
+                        if v[1] < range then
+                            gameEntityMap:updateHealth(v[2].gameEntity.xLoc, v[2].gameEntity.yLoc, value)
+                        else
+                            break
+                        end
                     end
                 end
+
+                if distanceAlgorithm(towerNode, {xloc, yloc}) < range then
+                    if towerNode[1] == tl.width then
+                        game:updateHealth(not game.side, value)
+                    else
+                        game:updateHealth( game.side, value)
+                    end
+                end
+
+                placeEffectGraphic(xloc, yloc, range, color)
             end
-            local newEntity = concord.entity(world)
-            :give("drawable", "circle",6,  {range * tl.size/2.3, colour, "fill"})
-            :give("pos", (xloc - 0.5) * tl.size, (yloc - 0.5) * tl.size)
-            :give("fader")
-            :give("garbage", 1)
-            world:removeEntity(bge)
+            world:removeEntity(bge) -- remove the effect, add the graphic
+        else
+            bge.recurringEffect.timeSince = bge.recurringEffect.timeSince + dt
+
+            if bge.recurringEffect.timeSince > bge.recurringEffect.interval then
+                bge.recurringEffect.timeSince = 0
+
+                if iterationGroup then
+                    for _,v in ipairs(iterationGroup) do
+                        if v[2].health then
+                            if v[1] < range then
+                                gameEntityMap:updateHealth(v[2].gameEntity.xLoc, v[2].gameEntity.yLoc, value)
+                            else
+                                break
+                            end 
+                        end
+                    end
+                    
+                    if distanceAlgorithm(towerNode, {xloc, yloc}) < range then
+                        if towerNode[1] == tl.width then
+                            game:updateHealth(game.side, value)
+                        else
+                            game:updateHealth(not game.side, value)
+                        end
+                    end
+
+                    placeEffectGraphic(xloc, yloc, range, color)
+                elseif effect == "generate money" then
+                    game:updateMoney(value)
+                elseif effect == "tower hospital" then
+                    game:updateHealth(team, value)
+                end
+            end
         end
     end
 end
@@ -533,7 +603,6 @@ end
 
 function fadeSystem:update(dt)
     for _, bge in ipairs(self.faders) do
-        print("yo", unpack(bge.drawable.color))
         local transparency = 1-(bge.garbage.time/bge.garbage.maxTime)
         bge.drawable.color = {bge.drawable.color[1], bge.drawable.color[2], bge.drawable.color[3], transparency}
     end
@@ -556,15 +625,17 @@ function buttonSystem:checkClick(x, y)
             posX, posY = getTilePosition(x,y)
             if game.cash >= purchasableEntities[purchaseIndex].price and gameEntityMap[posY][posX] == nil then
                 if not (posY == tl.height/2 and (posX == 1 or posX == self.width)) then
-                    if networking then 
-                        networking:send("p"..tostring(purchaseIndex)..":"..tostring(posX)..":"..tostring(posY)) 
+                    if posX < tl.width/2 + 1 or not purchasableEntities[purchaseIndex].drawable then
+                        if networking then 
+                            networking:send("p"..tostring(purchaseIndex)..":"..tostring(posX)..":"..tostring(posY)) 
+                        end
+
+                        game.cash = game.cash - purchasableEntities[purchaseIndex].price
+
+                        placeEntity(purchaseIndex, posX, posY, game.side)
+                    
+                        readyToPlaceEntity:give("pos", 1200, 1200)
                     end
-
-                    game.cash = game.cash - purchasableEntities[purchaseIndex].price
-
-                    placeEntity(purchaseIndex, posX, posY, game.side)
-                
-                    readyToPlaceEntity:give("pos", 1200, 1200)
                 end
             end
         end
@@ -650,6 +721,11 @@ function tl:draw()
             love.graphics.setColor(cl.default)
         end
     end
+
+    love.graphics.setLineWidth(10)
+    love.graphics.setColor(cl.grey)
+    love.graphics.line(tl.width/2 * tl.size + tl.xOffset, 0, tl.width/2 * tl.size + tl.xOffset, tl.height * tl.size)
+    love.graphics.setColor(cl.default)
 end
 
 function distanceAlgorithm(startNode, endNode)
@@ -865,8 +941,7 @@ function gameEntityMap:rangedGetLocalEnemies(startNode, towerNode, team, range)
     end
 end
 
-function gameEntityMap:updateHealth(x,y,damage)
-
+function gameEntityMap:updateHealth(x,y,damage,attackerX, attackerY)
     self[y][x].health.hp = self[y][x].health.hp + damage
     
     if self[y][x].health.hp < 0 then
@@ -874,6 +949,13 @@ function gameEntityMap:updateHealth(x,y,damage)
         self[y][x] = nil
     elseif self[y][x].health.hp > self[y][x].health.maxHealth then
         self[y][x].health.hp = self[y][x].health.maxHealth
+
+        if attackerX then
+            local thorns = self[y][x].thorns 
+            if thorns then
+                gameEntityMap:updateHealth(attackerX, attackerY, -thorns.damage)
+            end
+        end
     end
 end
 
@@ -881,10 +963,13 @@ function placeEntity(index, posX, posY, side)
     print("Placing entity at ", posX, posY, index)
     local newEntity = concord.entity(world)
     :give("gameEntity", index, posX, posY, side)
-    :give("drawable", "image", 5,{purchasableEntities[index].image, tl.size/tl.defaultImageSize})
     :give("pos", (posX-1) * tl.size, (posY-1) * tl.size)
 
     local purchasedItem = purchasableEntities[index]
+
+    if purchasedItem.drawable then
+        newEntity:give("drawable", "image", 5,{purchasableEntities[index].image, tl.size/tl.defaultImageSize})
+    end
 
     if purchasedItem.pathfind then
         newEntity:give("pathfind",purchasedItem.pathfind)
@@ -893,7 +978,7 @@ function placeEntity(index, posX, posY, side)
     if purchasedItem.attack then
         newEntity:give("attack", purchasedItem.attack, purchasedItem.damage, game.pfInterval * (1/purchasedItem.attackSpeed))
     end
-
+    
     if purchasedItem.attackRange then
         newEntity:give("attackRange", purchasedItem.attackRange)
     end
@@ -910,7 +995,7 @@ function placeEntity(index, posX, posY, side)
         newEntity:give("effectRange", purchasedItem.effectRange)
     end
 
-    if purchasedItem.recurringEffect then
+    if purchasedItem.effectInterval then
         newEntity:give("recurringEffect", purchasedItem.effectInterval)
     end
 
@@ -923,12 +1008,75 @@ function placeEntity(index, posX, posY, side)
     end
 end
 
+function placeEffectGraphic(xloc, yloc, range, color)
+    local newEntity = concord.entity(world)
+    :give("drawable", "circle",6,  {range * tl.size/2.3, color, "fill"})
+    :give("pos", (xloc - 0.5) * tl.size, (yloc - 0.5) * tl.size)
+    :give("fader")
+    :give("garbage", 1)
+
+end
+
 function game:updateHealth(team, amount)
     if team then
-        game.enemyHealth = game.enemyHealth + amount
+        self.enemyHealth = self.enemyHealth + amount
+
+        if self.enemyHealth <= 0 then
+            game:gameOver("You have won!")
+        end
     else
-        game.health = game.health + amount
+        self.health = self.health + amount
+        
+        if self.health <= 0 then
+            game:gameOver("Your friend has won!")
+        end
     end
+end
+
+function game:updateMoney(amount)
+    self.cash = self.cash + amount
+end
+
+function game:gameOver(winner)
+    world:clear()
+    world:addEntity(highlightEntity)
+
+    local button = concord.entity(world)
+
+    local buttonWidth = 100
+    local buttonHeight = 50
+    local buttonX = game.width/2 - buttonWidth/2
+    local buttonY = game.height/5*4 - buttonHeight/5*4 
+
+    local buttonEntity = concord.entity(world)
+    buttonEntity:give("button", buttonX, buttonY, buttonWidth, buttonHeight, game.exitGame)
+    buttonEntity:give("highlightOnMouse")
+
+
+    local canvasDraw = love.graphics.newCanvas(buttonWidth, buttonHeight)    
+    love.graphics.setCanvas(canvasDraw)
+    love.graphics.setColor(cl.grey)
+    love.graphics.rectangle("fill", 0,0, canvasDraw:getWidth(), canvasDraw:getHeight())
+    love.graphics.setColor(cl.red)
+    love.graphics.printf("Exit", 0, canvasDraw:getHeight()/2 - 15, canvasDraw:getWidth(), "center")
+    love.graphics.setCanvas()
+
+    local canvas = concord.entity(world)
+    :give("pos", buttonX, buttonY)
+    :give("drawable", "canvas", 1, {canvasDraw})
+    
+
+    gameStates.loadoutChosen = false
+
+    if winner then
+        gameStates.over = winner
+    end
+end
+
+function game:exitGame()
+    print("game is done")
+
+    love.event.quit(0)
 end
 
 world:addSystems(drawUI)
@@ -972,7 +1120,7 @@ function generatePopUp(index)
 
     for ind, value in pairs(purchasableEntities[index]) do
         love.graphics.setColor(cl.default)
-        if ind ~= "image" then
+        if ind ~= "image" and ind ~= "drawable" then
             love.graphics.print(ind.. ": ".. value, 0, y)
             y = y + 15
         end
@@ -1171,7 +1319,6 @@ function love.update(dt)
                         table.insert(purchaseInfo, value)
                     end
                     local purchasedIndex, posX, posY = unpack(purchaseInfo)
-
                     placeEntity(tonumber(purchasedIndex), tl.width - tonumber(posX) + 1, tonumber(posY), not game.side)                    
                 end
             end 
@@ -1216,7 +1363,13 @@ end
 function love.draw()
     if gameStates.loadoutChosen then
         tl:draw()
+    elseif gameStates.over then
+        love.graphics.setColor(cl.black)
+        love.graphics.rectangle("fill", 0,0,game.width, game.height)
+        love.graphics.setColor(cl.red)
+        love.graphics.printf(gameStates.over,0, game.height/2 - 300, game.width, "center")
     end
+
     world:emit("draw")
 
     if gameStates.loadoutChosen then
