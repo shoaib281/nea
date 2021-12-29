@@ -49,7 +49,8 @@ def addUser(self,index):
     player = self.networking.playerDict[index]
 
     plrFrame = playerFrame(frame, self.frames, player, window)
-    plrFrame.addInviteButton()
+    if player["username"] != self.networking.username:
+        plrFrame.addInviteButton()
 
     self.frames.append(plrFrame)
 
@@ -64,7 +65,7 @@ class playerFrame():
         self.label.place(relx = 0.5, anchor=N)
 
     def removeInviteButton(self):
-        if self.inviteButton:
+        if hasattr(self, "inviteButton"):
             self.inviteButton.place_forget()
 
     def addInviteButton(self):
@@ -106,8 +107,6 @@ class playerFrame():
         for frame in self.frames:
                     frame.removeAcceptReject()
                     frame.removeInviteButton()
-
-    
 
     def acceptInvite(self): #server
         connection = self.connection
