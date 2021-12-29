@@ -45,16 +45,16 @@ local game = {
     width = 1000,
     title = "Clash",
     side = false, -- starts on the left
-    cash = 1000,
-    health = 1000,
-    enemyHealth = 1000,
     pfInterval = 1,
-    pfSpeed = 0
+    pfSpeed = 0,
+    player = {},
+    enemy = {}
 }
 
 local gameStates = {
     purchaseMode = false,
     loadoutChosen = false,
+    enemyLoadoutChosen = false,
     over = false
 }
 
@@ -69,19 +69,27 @@ local tl = {
 local loadouts = {
     {
         name = "Homeless",
-        cash = 100
+        cash = 100,
+        health = 1500,
+        damageMultiplier = 5
     },
     {
         name = "Poor",
-        cash = 250
+        cash = 250,
+        health = 1000,
+        damageMultiplier = 1.1
     },
     {
         name = "Middle class",
-        cash = 500
+        cash = 500,
+        health = 750,
+        damageMultiplier = 1
     },
     {
         name = "Billionaire",
-        cash = 2000
+        cash = 2000,
+        health = 500,
+        damageMultiplier = 0.9
     }
 }
 
@@ -280,6 +288,12 @@ concord.component("drawable", function(sf, type, layer, args)
         image, scale = unpack(args)
         sf.image = image
         sf.scale = scale
+    elseif type == "filterImage" then
+        image, scale, filterColor = unpack(args)
+        sf.image = image
+        sf.scale = scale
+        sf.filterColor = filterColor
+
     elseif type == "line" then
         local lineCoords, color = unpack(args)
         local xOne, yOne, xTwo, yTwo = unpack(lineCoords)
@@ -479,8 +493,17 @@ function gameSystem:update(dt)
 
                 if enemyEntity then
                     local damage = bge.attack.damage
+                    local team = bge.gameEntity.team
+
+                    if team == game.side then -- my team
+                        damage = damage * game.player.damageMultiplier
+                    else
+                        damage = damage * game.enemy.damageMultiplier
+                    end
+
+                    damage = math.ceil(damage)
+
                     if enemyEntity == "tower" then
-                        local team = bge.gameEntity.team
                         game:updateHealth(team==game.side, damage)
                         enemyEntity = towerNode
                     else
@@ -618,19 +641,19 @@ function buttonSystem:checkClick(x, y)
         end
     end
 
-    if gameStates.loadoutChosen and gameStates.purchaseMode then
+    if gameStates.loadoutChosen and gameStates.enemyLoadoutChosen and gameStates.purchaseMode then
         popupDescriptionEntity:give("pos", 1200, 1200)
         if y < (tl.size * tl.height) and not (yPos == tl.height/2 and (xPos == 1 or xPos == tl.width)) then
             local purchaseIndex = gameStates.purchaseMode
             posX, posY = getTilePosition(x,y)
-            if game.cash >= purchasableEntities[purchaseIndex].price and gameEntityMap[posY][posX] == nil then
+            if game.player.cash >= purchasableEntities[purchaseIndex].price and gameEntityMap[posY][posX] == nil then
                 if not (posY == tl.height/2 and (posX == 1 or posX == self.width)) then
                     if posX < tl.width/2 + 1 or not purchasableEntities[purchaseIndex].drawable then
                         if networking then 
                             networking:send("p"..tostring(purchaseIndex)..":"..tostring(posX)..":"..tostring(posY)) 
                         end
 
-                        game.cash = game.cash - purchasableEntities[purchaseIndex].price
+                        game.player.cash = game.player.cash - purchasableEntities[purchaseIndex].price
 
                         placeEntity(purchaseIndex, posX, posY, game.side)
                     
@@ -690,13 +713,17 @@ function drawUI:draw()
                 love.graphics.draw(entity.drawable.canvas, entity.pos.x, entity.pos.y)
             elseif entity.drawable.type == "image" then
                 love.graphics.draw(entity.drawable.image, entity.pos.x + tl.xOffset, entity.pos.y, 0,entity.drawable.scale, entity.drawable.scale)
+            elseif entity.drawable.type == "filterImage" then
+                love.graphics.setColor(entity.drawable.filterColor)
+                love.graphics.draw(entity.drawable.image, entity.pos.x + tl.xOffset, entity.pos.y, 0,entity.drawable.scale, entity.drawable.scale)
+                love.graphics.setColor(cl.default)
             elseif entity.drawable.type == "line" then
                 love.graphics.setColor(entity.drawable.color)
                 love.graphics.setLineWidth(1)
                 love.graphics.line(entity.drawable.xOne + tl.xOffset, entity.drawable.yOne, entity.drawable.xTwo + tl.xOffset, entity.drawable.yTwo)
                 love.graphics.setColor(cl.default)
             
-            
+                
             end
         end
     end
@@ -968,7 +995,11 @@ function placeEntity(index, posX, posY, side)
     local purchasedItem = purchasableEntities[index]
 
     if purchasedItem.drawable then
-        newEntity:give("drawable", "image", 5,{purchasableEntities[index].image, tl.size/tl.defaultImageSize})
+        if side == game.side then
+            newEntity:give("drawable", "image", 5,{purchasableEntities[index].image, tl.size/tl.defaultImageSize})
+        else
+            newEntity:give("drawable", "filterImage", 5, {purchasableEntities[index].image, tl.size/tl.defaultImageSize, cl.red})
+        end
     end
 
     if purchasedItem.pathfind then
@@ -1019,15 +1050,15 @@ end
 
 function game:updateHealth(team, amount)
     if team then
-        self.enemyHealth = self.enemyHealth + amount
+        self.enemy.health = self.enemy.health + amount
 
-        if self.enemyHealth <= 0 then
+        if self.enemy.health <= 0 then
             game:gameOver("You have won!")
         end
     else
-        self.health = self.health + amount
+        self.player.health = self.player.health + amount
         
-        if self.health <= 0 then
+        if self.player.health <= 0 then
             game:gameOver("Your friend has won!")
         end
     end
@@ -1133,7 +1164,32 @@ function generatePopUp(index)
     return canvas
 end
 
+function setLoadoutStats(myTeam, loadoutNumber)
+    local target
+    if myTeam then
+        target = game.player
+    else
+        target = game.enemy
+    end
+
+    loadout = loadouts[tonumber(loadoutNumber)]
+
+    print("bim", loadoutNumber, loadout)
+
+
+    for key, value in pairs(loadout) do
+        print("hello????", key, value)
+        target[key] = value
+    end
+    
+end
+
 function chooseAloadout(args)
+
+    loadoutNumber = unpack(args)
+
+
+    networking:send("l"..tostring(loadoutNumber))
 
     world:clear()
 
@@ -1143,10 +1199,9 @@ function chooseAloadout(args)
     world:addSystems(gameSystem)
     world:addSystems(fadeSystem)
 
-    loadoutNumber = unpack(args)
     gameStates.loadoutChosen = loadoutNumber
-    local loadout = loadouts[loadoutNumber]
-    game.cash = loadout.cash
+    
+    setLoadoutStats(true, loadoutNumber)
 
     local canvas = love.graphics.newCanvas(game.width, game.height - (tl.size * tl.height))
     local canvasX = 0
@@ -1216,7 +1271,8 @@ function love.load(args)
     love.window.setTitle(game.title..tostring(myPort))
     love.graphics.setBackgroundColor(cl.backgroundColor)
     love.graphics.setLineWidth(10)
-    local font = fonts.large
+    local largeFont = fonts.large
+    local smallFont = fonts.verySmall
 
     local stripSize = (game.width - (loadoutUI.amount * loadoutUI.width)) / (loadoutUI.amount + 1) 
     
@@ -1237,10 +1293,19 @@ function love.load(args)
         love.graphics.rectangle("fill",subCanvasOffset,20, subCanvasWidth, 100)
 
         love.graphics.setColor(cl.loadoutText)
-        love.graphics.printf(loadouts[i].name, font, subCanvasOffset, 50,subCanvasWidth, "center")
+        love.graphics.printf(loadouts[i].name, largeFont, subCanvasOffset, 50,subCanvasWidth, "center")
         
         love.graphics.setColor(cl.loadoutInfo) -- stats
         love.graphics.rectangle("fill", subCanvasOffset, 140, subCanvasWidth, 310) -- 120, 350
+
+        love.graphics.setColor(cl.loadoutText)
+        
+        local height = 170
+
+        for key, value in pairs(loadouts[i]) do
+            love.graphics.printf(key .. ": " .. value, smallFont, subCanvasOffset, height, subCanvasWidth, "center")
+            height = height + 30
+        end
 
         local buttonCanvas = love.graphics.newCanvas(subCanvasWidth, 100)
         local buttonCanvasX = subCanvasOffset
@@ -1252,7 +1317,7 @@ function love.load(args)
         love.graphics.rectangle("fill", 0, 0, buttonCanvas:getWidth(), buttonCanvas:getHeight()) -- select box
 
         love.graphics.setColor(cl.loadoutText)
-        love.graphics.printf("Select", font,0, 30, buttonCanvas:getWidth(),"center") -- select button
+        love.graphics.printf("Select", largeFont,0, 30, buttonCanvas:getWidth(),"center") -- select button
         
         local buttonEntity = concord.entity(world)
         buttonEntity:give("button", canvasX + buttonCanvasX, canvasY + buttonCanvasY, buttonCanvas:getWidth(), buttonCanvas:getHeight(), chooseAloadout, {i})
@@ -1320,12 +1385,16 @@ function love.update(dt)
                     end
                     local purchasedIndex, posX, posY = unpack(purchaseInfo)
                     placeEntity(tonumber(purchasedIndex), tl.width - tonumber(posX) + 1, tonumber(posY), not game.side)                    
+                elseif string.sub(data,1,1) == "l" then
+                    loadoutNumber = data:sub(2)
+                    setLoadoutStats(false, loadoutNumber) 
+                    gameStates.enemyLoadoutChosen = true
                 end
             end 
         end
     end
 
-    if gameStates.loadoutChosen then
+    if gameStates.loadoutChosen and gameStates.enemyLoadoutChosen then
         local left = false
         local right = false
 
@@ -1361,7 +1430,7 @@ function love.update(dt)
 end
 
 function love.draw()
-    if gameStates.loadoutChosen then
+    if gameStates.loadoutChosen and gameStates.enemyLoadoutChosen then
         tl:draw()
     elseif gameStates.over then
         love.graphics.setColor(cl.black)
@@ -1372,11 +1441,13 @@ function love.draw()
 
     world:emit("draw")
 
-    if gameStates.loadoutChosen then
+
+    if gameStates.loadoutChosen and gameStates.enemyLoadoutChosen then
+
         love.graphics.setFont(fonts.small)
-        love.graphics.print("Cash: ".. game.cash, 10,10)
-        love.graphics.print("Health: ".. game.health, 10, 40)
-        love.graphics.print("Enemy Health: ".. game.enemyHealth, 10, 70)
+        love.graphics.print("Cash: ".. game.player.cash, 10,10)
+        love.graphics.print("Health: ".. game.player.health, 10, 40)
+        love.graphics.print("Enemy Health: ".. game.enemy.health, 10, 70)
     end
 end
 
