@@ -38,6 +38,7 @@ def validateUsername(args):
                 window.frames = []
                 window.networking = networkingClass.networkingClass(chosenUsername, window)
                 window.networking.selfBroadcast()
+                window.inGame = False
                 threading.Thread(target=window.networking.loop).start()
                 threading.Thread(target=window.networking.listeningLoop).start()
 
@@ -105,18 +106,24 @@ class playerFrame():
 
     def clearEverything(self):
         for frame in self.frames:
-                    frame.removeAcceptReject()
-                    frame.removeInviteButton()
+                frame.removeAcceptReject()
+                frame.removeInviteButton()
 
     def acceptInvite(self): #server
-        connection = self.connection
-        connection.send(bytes("Accept","utf-8"))
-        self.connection = False
-        self.clearEverything()
+        print("wtf", self.window.inGame)
+        if not self.window.inGame:
+            print("yo")
 
-        plrIndex = self.index
-        
-        launch.startGame(self.window.networking.myIp, self.window.networking.listeningPort + 1,self.window.networking.playerDict[plrIndex]["address"],self.window.networking.playerDict[plrIndex]["listeningPort"] + 1)
+            connection = self.connection
+            connection.send(bytes("Accept","utf-8"))
+            self.connection = False
+
+            self.removeAcceptReject()
+            self.addInviteButton()
+
+            plrIndex = self.index
+            
+            self.window.launcher.startGame(self.window.networking.playerDict[plrIndex]["address"],self.window.networking.playerDict[plrIndex]["listeningPort"] + 1)
 
     def destroyFrame(self):
         self.frame.pack_forget()

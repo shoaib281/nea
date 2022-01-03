@@ -2,7 +2,7 @@ import socket
 import threading
 import time
 import random
-import launch
+from launch import gameLauncher
 
 class networkingClass():
     def __init__(self, username, window):
@@ -25,6 +25,8 @@ class networkingClass():
 
         self.myIp = socket.gethostbyname(socket.gethostname())
 
+        self.window.launcher = gameLauncher(self.myIp, self.listeningPort + 1, self.window)
+
         print(self.myIp, self.listeningPort)
 
         self.killDetection = 5
@@ -43,11 +45,13 @@ class networkingClass():
         response = sock.recv(1024).decode("utf-8")
         print("Received a response: ", response, " from: ", index)
 
-        if response == "Accept":
-            frame.clearEverything()
-            launch.startGame(self.myIp, self.listeningPort + 1, self.playerDict[index]["address"], self.playerDict[index]["listeningPort"] + 1)
-        elif response == "Reject":
-            frame.addInviteButton()
+        frame.addInviteButton()
+
+
+        if response == "Accept" and not self.window.inGame:
+
+            self.window.launcher.startGame(self.playerDict[index]["address"], self.playerDict[index]["listeningPort"] + 1)
+
 
         sock.close()
         self.playerDict[index]["socketObject"] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
