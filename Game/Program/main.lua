@@ -19,6 +19,8 @@ local highlightEntity
 local readyToPlaceEntity
 local placeBox
 local popupDescriptionEntity
+local helpCanvas
+local helpText = "Press H to close. Press the left and right arrows to pan over the map. Click buy on an item below and then click on a place in the map to place the item. You can only place characters to the left of the line. Characters will defend your tower or attack the enemy tower. Your goal is to destroy the enemy tower before the enemy destroys yours! Good luck!"
 
 local cl = {
     default = {1,1,1,1},
@@ -48,7 +50,8 @@ local game = {
     pfInterval = 1,
     pfSpeed = 0,
     player = {},
-    enemy = {}
+    enemy = {},
+    help = false
 }
 
 local gameStates = {
@@ -642,7 +645,7 @@ function buttonSystem:checkClick(x, y)
     end
 
     if gameStates.loadoutChosen and gameStates.enemyLoadoutChosen and gameStates.purchaseMode then
-        popupDescriptionEntity:give("pos", 1200, 1200)
+        --popupDescriptionEntity:give("pos", 1200, 1200)
         if y < (tl.size * tl.height) and not (yPos == tl.height/2 and (xPos == 1 or xPos == tl.width)) then
             local purchaseIndex = gameStates.purchaseMode
             posX, posY = getTilePosition(x,y)
@@ -669,7 +672,7 @@ function buttonSystem:highlight(x,y)
     local highlighted = false
 
     for _, ent in ipairs(self.highlightables) do
-        button = ent.button
+        local button = ent.button
         if x > button.x and x < button.x + button.width and y > button.y and y < button.y + button.height then
             highlighted = ent
             highlightEntity:give("pos", button.x, button.y)
@@ -686,7 +689,7 @@ function buttonSystem:highlight(x,y)
             popupDescriptionEntity:give("pos", 1200, 1200)
         end
     else
-        if self.popups:has(highlighted) and not gameStates.purchaseMode then
+        if self.popups:has(highlighted) then --and not gameStates.purchaseMode 
             local canvas = generatePopUp(unpack(highlighted.button.args))
             popupDescriptionEntity:give("pos", highlighted.button.x, highlighted.button.y - purchaseUI.popupHeight - purchaseUI.framePaddingY - purchaseUI.buttonPaddingY - 5)
             :give("drawable", "canvas", 2, {canvas})        
@@ -1065,7 +1068,7 @@ function game:updateHealth(team, amount)
 end
 
 function game:updateMoney(amount)
-    self.cash = self.cash + amount
+    self.player.cash = self.player.cash + amount
 end
 
 function game:gameOver(winner)
@@ -1102,6 +1105,17 @@ function game:gameOver(winner)
     if winner then
         gameStates.over = winner
     end
+end
+
+function game:toggleHelp()
+    if self.help then
+        helpCanvas:give("pos", 1200,1200)        
+    else 
+        print(helpCanvas.drawable.canvas)
+        helpCanvas:give("pos", game.width/2 - helpCanvas.drawable.canvas:getWidth()/2, game.height/2 - helpCanvas.drawable.canvas:getHeight()/2)
+    end
+
+    self.help = not self.help
 end
 
 function game:exitGame()
@@ -1174,11 +1188,7 @@ function setLoadoutStats(myTeam, loadoutNumber)
 
     loadout = loadouts[tonumber(loadoutNumber)]
 
-    print("bim", loadoutNumber, loadout)
-
-
     for key, value in pairs(loadout) do
-        print("hello????", key, value)
         target[key] = value
     end
     
@@ -1252,11 +1262,29 @@ function chooseAloadout(args)
 
     popupDescriptionEntity = concord.entity(world)
     :give("pos", 1200, 1200)
-    :give("drawable", "canvas", 2, {canvas})
+    :give("drawable", "canvas", 6, {canvas})
 
     for i =1, tl.height do
         gameEntityMap[i] = {}
     end
+
+    local width = 500
+    local height = 500
+    local x = game.width/2 - width/2
+    local y = game.height/2 - height/2
+
+    local canvas = love.graphics.newCanvas(width, height)
+    love.graphics.setCanvas(canvas)
+    love.graphics.setColor(cl.loadoutButtonColor)
+    love.graphics.rectangle("fill",0,0, width, height)
+    love.graphics.setColor(cl.loadoutText)
+    love.graphics.printf(helpText,0,0, width)
+    love.graphics.setColor(cl.default)
+    love.graphics.setCanvas()
+
+    helpCanvas = concord.entity(world)
+    :give("pos", 1200, 0)
+    :give("drawable", "canvas", 1, {canvas})
 end
 
 function love.load(args)
@@ -1448,6 +1476,7 @@ function love.draw()
         love.graphics.print("Cash: ".. game.player.cash, 10,10)
         love.graphics.print("Health: ".. game.player.health, 10, 40)
         love.graphics.print("Enemy Health: ".. game.enemy.health, 10, 70)
+        love.graphics.print("Press H for help", 10, 100)
     end
 end
 
@@ -1465,5 +1494,9 @@ function love.keypressed(key, scancode, isrepeat)
             purchaseMode({false}) 
             readyToPlaceEntity:give("pos", 1200, 1200)
         end 
+    elseif key == "H" or key == "h" then
+        if gameStates.loadoutChosen then
+            game:toggleHelp()
+        end
     end
 end
