@@ -229,7 +229,7 @@ local purchasableEntities = {
     },
     {
         price = 24,
-        name = "aquinas",
+        name = "hospital",
         drawable = true,
         effect = "tower hospital",
         effectValue = 20,
