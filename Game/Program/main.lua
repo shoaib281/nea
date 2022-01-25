@@ -1284,7 +1284,7 @@ function chooseAloadout(args)
 
     helpCanvas = concord.entity(world)
     :give("pos", 1200, 0)
-    :give("drawable", "canvas", 1, {canvas})
+    :give("drawable", "canvas", 6, {canvas})
 end
 
 function love.load(args)
