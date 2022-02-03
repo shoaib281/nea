@@ -972,18 +972,20 @@ function gameEntityMap:rangedGetLocalEnemies(startNode, towerNode, team, range)
 end
 
 function gameEntityMap:updateHealth(x,y,damage,attackerX, attackerY)
-    self[y][x].health.hp = self[y][x].health.hp + damage
-    
-    if self[y][x].health.hp < 0 then
-        world:removeEntity(self[y][x])
-        self[y][x] = nil
-    elseif self[y][x].health.hp > self[y][x].health.maxHealth then
-        self[y][x].health.hp = self[y][x].health.maxHealth
+    if self[y][x].health then
+        self[y][x].health.hp = self[y][x].health.hp + damage
+        
+        if self[y][x].health.hp < 0 then
+            world:removeEntity(self[y][x])
+            self[y][x] = nil
+        elseif self[y][x].health.hp > self[y][x].health.maxHealth then
+            self[y][x].health.hp = self[y][x].health.maxHealth
 
-        if attackerX then
-            local thorns = self[y][x].thorns 
-            if thorns then
-                gameEntityMap:updateHealth(attackerX, attackerY, -thorns.damage)
+            if attackerX then
+                local thorns = self[y][x].thorns 
+                if thorns then
+                    gameEntityMap:updateHealth(attackerX, attackerY, -thorns.damage)
+                end
             end
         end
     end
