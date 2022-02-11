@@ -36,7 +36,8 @@ class networkingClass():
         
     def selfBroadcast(self):
         threading.Timer(self.broadcastTime, self.selfBroadcast,[]).start()
-        
+        self.checkKill()
+
         self.broadcastSocket.sendto(bytes(self.username + ":" + str(self.listeningPort),"utf-8"),("<broadcast>",self.broadcastPort))
 
 
@@ -77,17 +78,19 @@ class networkingClass():
                         frame.index = targetPlayer
                         break
 
-    def checkKill(self, player):
+    def checkKill(self):
         
-        playerTime = self.playerDict[player]["lastUpdate"]
-        
-        if int(time.time()) - playerTime > self.killDetection:
-            for frame in self.window.frames:
-                    if player == frame.player["index"]:
 
-                        frame.destroyFrame()
-                        del self.playerDict[player]
-                        break
+        for player in list(self.playerDict):
+            playerTime = self.playerDict[player]["lastUpdate"]
+            
+            if int(time.time()) - playerTime > self.killDetection:
+                for frame in self.window.frames:
+                        if player == frame.player["index"]:
+
+                            frame.destroyFrame()
+                            del self.playerDict[player]
+                            break
 
     def newDataToDict(self, data):
 
@@ -99,8 +102,6 @@ class networkingClass():
         ip, port = address
 
         player = username + ":"  + ip
-
-        threading.Timer(self.killDetection + 1, self.checkKill, [player]).start()
 
         if not player in self.playerDict:
 
