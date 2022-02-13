@@ -7,6 +7,7 @@ import launch
 
 #creates window
 window = tkinter.Tk()
+window.title("Matchmaking")
 width, height = 700, 400
 window.update_idletasks()
 screenWidth, screenHeight = window.winfo_screenwidth(), window.winfo_screenheight()
