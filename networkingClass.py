@@ -34,13 +34,14 @@ class networkingClass():
 
         self.playerDict = {}
         
+    #broadcasts itself and kills inactive players from UI
     def selfBroadcast(self):
         threading.Timer(self.broadcastTime, self.selfBroadcast,[]).start()
         self.checkKill()
 
         self.broadcastSocket.sendto(bytes(self.username + ":" + str(self.listeningPort),"utf-8"),("<broadcast>",self.broadcastPort))
 
-
+    #listens for invite responses
     def listeningAcceptReject(self, index, frame):
         sock = self.playerDict[index]["socketObject"]
         response = sock.recv(1024).decode("utf-8")
@@ -57,7 +58,7 @@ class networkingClass():
         sock.close()
         self.playerDict[index]["socketObject"] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-
+    #listens for invites
     def listeningLoop(self): #server, broadcast
         while True:
             clientSocket, address = self.listeningInviteSocket.accept()
@@ -78,9 +79,8 @@ class networkingClass():
                         frame.index = targetPlayer
                         break
 
+    #deletes items that haven't received a broadcast in a while, polayer probably exited
     def checkKill(self):
-        
-
         for player in list(self.playerDict):
             playerTime = self.playerDict[player]["lastUpdate"]
             
@@ -92,6 +92,7 @@ class networkingClass():
                             del self.playerDict[player]
                             break
 
+    #handles received broadcasts
     def newDataToDict(self, data):
 
         username, address = data
@@ -124,7 +125,7 @@ class networkingClass():
         else:
             self.playerDict[player]["lastUpdate"] = int(time.time())
         
-
+    #listens for broadcasts
     def loop(self):
         while True:
             self.newDataToDict(self.listeningBroadcastSocket.recvfrom(1024))

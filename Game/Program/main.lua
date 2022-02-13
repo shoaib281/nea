@@ -1,4 +1,4 @@
-local concord = require("Concord")
+local concord = require("Concord") --ECS library
 local entity = concord.entity
 local component = concord.component
 local system = concord.system
@@ -6,22 +6,21 @@ local world = concord.world
 local components = concord.components
 local networking
 
-local socket = require "socket"
-
-local layers = {{},{},{},{},{},{}}
-local gameEntityMap = {}
-local myTeamEntities = {}
+local layers = {{},{},{},{},{},{}} --layers for drawing
+local gameEntityMap = {} -- 2d array for every item in the game
+local myTeamEntities = {} -- array containing all items in local team
 local enemyTeamEntities = {}
 local inputs = {"right", "left"}
 
-local world = concord.world()
+local world = concord.world() -- create
+---graphical entities whose variables are initialised
 local highlightEntity
 local readyToPlaceEntity
 local placeBox
 local popupDescriptionEntity
 local helpCanvas
-local helpText = "Press H to close. Press the left and right arrows to pan over the map. Click buy on an item below and then click on a place in the map to place the item. You can only place characters to the left of the line. Characters will defend your tower or attack the enemy tower. Your goal is to destroy the enemy tower before the enemy destroys yours! Good luck!"
 
+--array of colors
 local cl = {
     default = {1,1,1,1},
     loadoutBackgroundColor = {0,1,0},
@@ -42,6 +41,7 @@ local cl = {
     grey = {0.3,0.3,0.3}
 }
 
+--game data
 local game = {
     height = 700, 
     width = 1000,
@@ -54,6 +54,7 @@ local game = {
     help = false
 }
 
+--gameStates
 local gameStates = {
     purchaseMode = false,
     loadoutChosen = false,
@@ -61,6 +62,7 @@ local gameStates = {
     over = false
 }
 
+--information about the game map and tiles
 local tl = {
     height = 10,
     width = 20,
@@ -69,33 +71,35 @@ local tl = {
     defaultImageSize = 120
 }
 
+---loadouts and 
 local loadouts = {
     {
-        name = "Homeless",
-        cash = 100,
+        name = "Miltiary robot",
+        cash = 300,
         health = 1500,
-        damageMultiplier = 5
+        damageMultiplier = 2.5
     },
     {
-        name = "Poor",
-        cash = 250,
-        health = 1000,
-        damageMultiplier = 1.1
+        name = "Famous Athlete",
+        cash = 1000,
+        health = 2000,
+        damageMultiplier = 2
     },
     {
-        name = "Middle class",
-        cash = 500,
+        name = "thug",
+        cash = 1500,
         health = 750,
-        damageMultiplier = 1
+        damageMultiplier = 2.2
     },
     {
         name = "Billionaire",
         cash = 2000,
-        health = 500,
+        health = 1000,
         damageMultiplier = 0.9
     }
 }
 
+--stats of every purchasble item
 local purchasableEntities = {
     {
         price = 10,
@@ -238,15 +242,9 @@ local purchasableEntities = {
     }
 }
 
-local loadoutUI = {
-    paddingY = 50,
-    amount = 4,
-    width = 220
-} 
-
+--ui properties for the purchasing of items
 local purchaseUI = {
     framePaddingY = 10,
-    amount = 15,
     sizeX = 60,
     sizeY = 70,
     buttonPaddingX = 5,
@@ -256,12 +254,14 @@ local purchaseUI = {
     popupWidth = 150
 }
 
+--init fonts
 local fonts = {
     large = love.graphics.newFont(25),
     small = love.graphics.newFont(22),
     verySmall = love.graphics.newFont(16)
 }
 
+--inits all components
 concord.component("highlightOnMouse")
 
 concord.component("pos", function(sf, x, y)
@@ -285,14 +285,14 @@ concord.component("drawable", function(sf, type, layer, args)
         sf.color = color
         sf.fillType = fillType
     elseif type == "canvas" then
-        canvas = unpack(args)
+        local canvas = unpack(args)
         sf.canvas = canvas
     elseif type == "image" then
-        image, scale = unpack(args)
+        local image, scale = unpack(args)
         sf.image = image
         sf.scale = scale
     elseif type == "filterImage" then
-        image, scale, filterColor = unpack(args)
+        local image, scale, filterColor = unpack(args)
         sf.image = image
         sf.scale = scale
         sf.filterColor = filterColor
@@ -370,6 +370,7 @@ concord.component("popupDescription")
 
 concord.component("fader")
 
+--inits systems
 local gameSystem = concord.system({
     gameEntities = {"gameEntity"},
     pathfinders = {"pathfind"},
@@ -396,6 +397,7 @@ local fadeSystem = concord.system({
 })
 
 function drawUI:init()
+    --drawable added to drawUI
     self.drawables.onEntityAdded = function(pool, entity)
         layer = entity.drawable.layer
         
@@ -405,12 +407,14 @@ function drawUI:init()
 
         layers[layer][entity] = true
     end
+    --drawable removed from drawUI
     self.drawables.onEntityRemoved = function(pool, entity)
         layers[entity.drawable.layer][entity] = nil
     end
 end
 
 function gameSystem:init()
+    --game item added to gameentitmap
     self.gameEntities.onEntityAdded = function(pool, entity)
         local ge = entity.gameEntity
         gameEntityMap[ge.yLoc][ge.xLoc] = entity
@@ -421,6 +425,7 @@ function gameSystem:init()
             enemyTeamEntities[entity] = true
         end
     end
+    --game items reomved from gameentitmap
     self.gameEntities.onEntityRemoved = function(pool, entity)
         local ge = entity.gameEntity
         gameEntityMap[ge.yLoc][ge.xLoc] = nil
@@ -435,10 +440,11 @@ end
 
 function gameSystem:update(dt)
     game.pfSpeed = game.pfSpeed + dt
+    --pathfinds after every set interval
     if game.pfSpeed > game.pfInterval then
         game.pfSpeed = 0
 
-        -- pathfind first
+        -- iterates through everything that can pathfind
         for _, bge in ipairs(self.pathfinders) do
             local pfMode = bge.pathfind.target
             
@@ -473,6 +479,7 @@ function gameSystem:update(dt)
         end
     end
 
+    --iterates through everything that can attack
     for _, bge in ipairs(self.attackers) do
         if gameEntityMap[bge.gameEntity.yLoc][bge.gameEntity.xLoc] then 
             bge.attack.toHit = bge.attack.toHit + dt
@@ -527,6 +534,7 @@ function gameSystem:update(dt)
         end
     end
 
+    --iterates through all "effects"
     for _, bge in ipairs(self.effects) do
         local effect = bge.effect.effect
         local value = bge.effect.value
@@ -616,10 +624,13 @@ function gameSystem:update(dt)
     end
 end
 
+--garbage system responsible for deleting effects after set time
 function garbageSystem:update(dt)
+    --increments time property for all garbage
     for _, garbage in ipairs(self.garbage) do
         garbage.garbage.time = garbage.garbage.time + dt
     end
+    --deletes or removes garbage that has existed for too long
     for _, garbage in ipairs(self.garbage) do
         if garbage.garbage.time > garbage.garbage.maxTime then
             world:removeEntity(garbage)
@@ -627,6 +638,7 @@ function garbageSystem:update(dt)
     end
 end
 
+--system that reduces transparency of faders every update
 function fadeSystem:update(dt)
     for _, bge in ipairs(self.faders) do
         local transparency = 1-(bge.garbage.time/bge.garbage.maxTime)
@@ -635,8 +647,9 @@ function fadeSystem:update(dt)
 end
 
 function buttonSystem:checkClick(x, y)
+    --finds the button that was clicked, if exists
     for _, ent in ipairs(self.buttons) do
-        button = ent.button
+        local button = ent.button
         if x > button.x and x < button.x + button.width and y > button.y and y < button.y + button.height then
             highlightEntity:give("pos", 1200, 1200)
             button.func(button.args)
@@ -668,6 +681,7 @@ function buttonSystem:checkClick(x, y)
     end
 end
 
+--whenever mouse moves, checks to see if hovering over button to highlight
 function buttonSystem:highlight(x,y)
     local highlighted = false
 
@@ -682,8 +696,8 @@ function buttonSystem:highlight(x,y)
         end
     end
 
-    if not highlighted then
-        highlightEntity:give("pos", 1200, 1200)
+    if not highlighted then --move highlight away
+        highlightEntity:give("pos", 1200, 1200) 
 
         if gameStates.loadoutChosen then
             popupDescriptionEntity:give("pos", 1200, 1200)
@@ -701,7 +715,8 @@ function buttonSystem:highlight(x,y)
     end
 end
 
-function drawUI:draw()
+--draws game objects
+function drawUI:draw() 
     for i,layer in ipairs(layers) do
         for entity,_ in pairs(layer) do
             if entity.drawable.type == "rectangle" then
@@ -724,14 +739,13 @@ function drawUI:draw()
                 love.graphics.setColor(entity.drawable.color)
                 love.graphics.setLineWidth(1)
                 love.graphics.line(entity.drawable.xOne + tl.xOffset, entity.drawable.yOne, entity.drawable.xTwo + tl.xOffset, entity.drawable.yTwo)
-                love.graphics.setColor(cl.default)
-            
-                
+                love.graphics.setColor(cl.default)          
             end
         end
     end
 end
 
+--draws background grid
 function tl:draw()
     for y = 1, self.height do
         for x = 1, self.width do
@@ -758,10 +772,12 @@ function tl:draw()
     love.graphics.setColor(cl.default)
 end
 
+--finds distance between two points
 function distanceAlgorithm(startNode, endNode)
     return math.sqrt((endNode[2] - startNode[2])^2 + (startNode[1] - endNode[1])^2)
 end
 
+--bubble sort algorithm
 function bubbleSortEnemies(array)
     local swaps = true
 
@@ -785,6 +801,7 @@ function bubbleSortEnemies(array)
     return array
 end
 
+--returns list of enemies sorted by distance
 function gameEntityMap:getSortedListOfEnemies(startNode, team)
     local tempArray = {}
     
@@ -806,9 +823,9 @@ function gameEntityMap:getSortedListOfEnemies(startNode, team)
     end
 
     return bubbleSortEnemies(tempArray)
-
 end
 
+--finds best path to given enemy
 function gameEntityMap:pathfindForEnemy(startNode, endNode, team)
 
     local sortedListOfEnemies = self:getSortedListOfEnemies(startNode, team)
@@ -827,6 +844,7 @@ function gameEntityMap:pathfindForEnemy(startNode, endNode, team)
     return {posX, posY}
 end
 
+--A* algorithm
 function gameEntityMap:pathfind(startNode, endNode) -- already |found path| no path
     local distance = distanceAlgorithm(startNode, endNode)
     if distance == 1 then
@@ -843,7 +861,7 @@ function gameEntityMap:pathfind(startNode, endNode) -- already |found path| no p
         tempMap[yPos] = {}
 
         for xPos, value in pairs(row) do
-            tempMap[yPos][xPos] = "wagwan"
+            tempMap[yPos][xPos] = "a"
         end
     end
     
@@ -902,6 +920,7 @@ function gameEntityMap:pathfind(startNode, endNode) -- already |found path| no p
 
 end
 
+--pathfinds to enemy tower
 function gameEntityMap:pathfindForTower(startNode, endNode)   
     local posX, posY, possible = unpack(gameEntityMap:pathfind(startNode, endNode))
 
@@ -912,6 +931,7 @@ function gameEntityMap:pathfindForTower(startNode, endNode)
     return gameEntityMap:moveToTower(startNode, endNode)
 end
 
+--if no path, then just moves to tower
 function gameEntityMap:moveToTower(startNode, endNode)
     local distance = distanceAlgorithm(startNode, endNode)
 
@@ -934,6 +954,7 @@ function gameEntityMap:moveToTower(startNode, endNode)
     return {nil, nil}
 end
 
+--get list of enemies in vicinity
 function gameEntityMap:getLocalEnemies(startNode, towerNode)
     if distanceAlgorithm(startNode, towerNode) == 1 then
         return "tower"
@@ -955,6 +976,7 @@ function gameEntityMap:getLocalEnemies(startNode, towerNode)
     end
 end
 
+--get list of enemies within vicinity with given range
 function gameEntityMap:rangedGetLocalEnemies(startNode, towerNode, team, range)
     local sortedListOfEnemies = self:getSortedListOfEnemies(startNode, team)
 
@@ -971,6 +993,7 @@ function gameEntityMap:rangedGetLocalEnemies(startNode, towerNode, team, range)
     end
 end
 
+--updates health of entity when attacked
 function gameEntityMap:updateHealth(x,y,damage,attackerX, attackerY)
     if self[y][x].health then
         self[y][x].health.hp = self[y][x].health.hp + damage
@@ -991,6 +1014,7 @@ function gameEntityMap:updateHealth(x,y,damage,attackerX, attackerY)
     end
 end
 
+--puts entity in given position and gives all relevant properties
 function placeEntity(index, posX, posY, side)
     print("Placing entity at ", posX, posY, index)
     local newEntity = concord.entity(world)
@@ -1044,6 +1068,7 @@ function placeEntity(index, posX, posY, side)
     end
 end
 
+--place effects
 function placeEffectGraphic(xloc, yloc, range, color)
     local newEntity = concord.entity(world)
     :give("drawable", "circle",6,  {range * tl.size/2.3, color, "fill"})
@@ -1053,6 +1078,7 @@ function placeEffectGraphic(xloc, yloc, range, color)
 
 end
 
+--updates tower health
 function game:updateHealth(team, amount)
     if team then
         self.enemy.health = self.enemy.health + amount
@@ -1069,10 +1095,12 @@ function game:updateHealth(team, amount)
     end
 end
 
+--updates player cash
 function game:updateMoney(amount)
     self.player.cash = self.player.cash + amount
 end
 
+--when game is over
 function game:gameOver(winner)
     world:clear()
     world:addEntity(highlightEntity)
@@ -1109,6 +1137,7 @@ function game:gameOver(winner)
     end
 end
 
+--toggles help upon click
 function game:toggleHelp()
     if self.help then
         helpCanvas:give("pos", 1200,1200)        
@@ -1120,16 +1149,19 @@ function game:toggleHelp()
     self.help = not self.help
 end
 
+--exits game
 function game:exitGame()
     print("game is done")
 
     love.event.quit(0)
 end
 
+--adds systems to worlds
 world:addSystems(drawUI)
 world:addSystems(buttonSystem)
 world:addSystems(garbageSystem)
 
+--adds properties to entities
 highlightEntity = concord.entity(world)
 :give("pos", 1200,1200)
 :give("drawable", "rectangle", 4,{20,20, cl.buttonHighlight, "fill"})
@@ -1142,6 +1174,7 @@ placeBox = concord.entity(world)
 :give("pos", 1200, 1200)
 :give("drawable", "rectangle", 2,{game.width, tl.size *tl.height, cl.transBorder, "line"})
 
+--toggles red outline if purchasemode
 function purchaseMode(args)
     local enabled = unpack(args)
 
@@ -1154,6 +1187,7 @@ function purchaseMode(args)
     end
 end
 
+--highlighting button add popup
 function generatePopUp(index)
 
     local canvas = love.graphics.newCanvas(purchaseUI.popupWidth, purchaseUI.popupHeight)
@@ -1180,6 +1214,7 @@ function generatePopUp(index)
     return canvas
 end
 
+--updates proeprties to reflect loadout chosen
 function setLoadoutStats(myTeam, loadoutNumber)
     local target
     if myTeam then
@@ -1188,17 +1223,17 @@ function setLoadoutStats(myTeam, loadoutNumber)
         target = game.enemy
     end
 
-    loadout = loadouts[tonumber(loadoutNumber)]
+    local loadout = loadouts[tonumber(loadoutNumber)]
 
     for key, value in pairs(loadout) do
         target[key] = value
-    end
-    
+    end 
 end
 
+--runs when loadout is chosen
 function chooseAloadout(args)
 
-    loadoutNumber = unpack(args)
+    local loadoutNumber = unpack(args)
 
 
     networking:send("l"..tostring(loadoutNumber))
@@ -1223,8 +1258,8 @@ function chooseAloadout(args)
     love.graphics.setColor(cl.purchaseBar)
     love.graphics.rectangle("fill",0,0, canvas:getWidth(), canvas:getHeight())
     
-    local stripSize = (canvas:getWidth() - (purchaseUI.amount * purchaseUI.sizeX)) / (purchaseUI.amount + 1)
-    for i = 1,purchaseUI.amount do
+    local stripSize = (canvas:getWidth() - (#purchasableEntities * purchaseUI.sizeX)) / (#purchasableEntities + 1)
+    for i = 1,#purchasableEntities do
         xPos = (i * stripSize) + ((i-1) * purchaseUI.sizeX)
         yPos = purchaseUI.framePaddingY
 
@@ -1240,9 +1275,6 @@ function chooseAloadout(args)
         love.graphics.setColor(cl.default)
         love.graphics.printf("Buy", xPos+purchaseUI.buttonPaddingX, yPos + purchaseUI.buttonPaddingY + 2, purchaseUI.sizeX - (purchaseUI.buttonPaddingX * 2), "center")
 
-        --love.graphics.rectangle()
-
-
         local buttonEntity = concord.entity(world)
         buttonEntity:give("button", canvasX+xPos+purchaseUI.buttonPaddingX,canvasY+yPos + purchaseUI.buttonPaddingY, purchaseUI.sizeX - (purchaseUI.buttonPaddingX * 2), purchaseUI.buttonHeight, purchaseMode, {i})
         buttonEntity:give("highlightOnMouse")
@@ -1256,7 +1288,7 @@ function chooseAloadout(args)
     :give("pos", canvasX, canvasY)
     :give("drawable","canvas", 3, {canvas})
 
-    for i = 1, purchaseUI.amount do
+    for i = 1, #purchasableEntities do
         purchasableEntities[i].image = love.graphics.newImage("Images/"..i..".png")
     end
 
@@ -1270,10 +1302,12 @@ function chooseAloadout(args)
         gameEntityMap[i] = {}
     end
 
+    ---creates help canvas
     local width = 500
     local height = 500
     local x = game.width/2 - width/2
     local y = game.height/2 - height/2
+    local helpText = "Press H to close. Press the left and right arrows to pan over the map. Click buy on an item below and then click on a place in the map to place the item. You can only place characters to the left of the line. Characters will defend your tower or attack the enemy tower. Your goal is to destroy the enemy tower before the enemy destroys yours! Good luck!"
 
     local canvas = love.graphics.newCanvas(width, height)
     love.graphics.setCanvas(canvas)
@@ -1304,12 +1338,16 @@ function love.load(args)
     local largeFont = fonts.large
     local smallFont = fonts.verySmall
 
-    local stripSize = (game.width - (loadoutUI.amount * loadoutUI.width)) / (loadoutUI.amount + 1) 
+    local loadoutUIWidth = 220
+    local loadoutUIpaddingY = 50
+
+    local stripSize = (game.width - (#loadouts * loadoutUIWidth)) / (#loadouts + 1) 
     
-    for i = 1,loadoutUI.amount do
-        local canvas = love.graphics.newCanvas(loadoutUI.width, game.height - loadoutUI.paddingY * 2)
-        local canvasX = (i * stripSize) + ((i - 1) * loadoutUI.width)
-        local canvasY = loadoutUI.paddingY
+    --generates loadout menu
+    for i = 1,#loadouts do
+        local canvas = love.graphics.newCanvas(loadoutUIWidth, game.height - loadoutUIpaddingY * 2)
+        local canvasX = (i * stripSize) + ((i - 1) * loadoutUIWidth)
+        local canvasY = loadoutUIpaddingY
 
         local subCanvasOffset = 10
         local subCanvasWidth = canvas:getWidth() - (subCanvasOffset * 2)
@@ -1366,6 +1404,7 @@ function love.load(args)
     end
 end
 
+--gets position of tile based on x,y
 function getTilePosition(x,y)
     xPos = x - tl.xOffset
     yPos = y
@@ -1376,6 +1415,7 @@ function getTilePosition(x,y)
     return xPos, yPos
 end
 
+--sets position of highlight button for placing down entities
 function setPurchaseHighlightPosition(x,y)
     xPos, yPos = getTilePosition(x,y)
 
@@ -1394,18 +1434,19 @@ function setPurchaseHighlightPosition(x,y)
     end
 end
 
+--runs every frame
 function love.update(dt)
-    world:emit("update", dt)
+    world:emit("update", dt) --every listener listening for update runs
 
-    if networking then
-        if not networking.client then
+    if networking then --handling received enemy actions
+        if not networking.client then --try to initialise networking client
             networking.client = networking.listeningSocket:accept()
 
             if networking.client then
                 networking.client:settimeout(0)
             end
         else
-            local data = networking:listen()
+            local data = networking:listen() 
             if data then
                 if string.sub(data, 1, 1) == "p" then
                     data = data:sub(2)
@@ -1424,11 +1465,12 @@ function love.update(dt)
         end
     end
 
-    if gameStates.loadoutChosen and gameStates.enemyLoadoutChosen then
+    --pans camera left and right to input
+    if gameStates.loadoutChosen and gameStates.enemyLoadoutChosen then 
         local left = false
         local right = false
 
-        for _, key in pairs(inputs) do
+        for _, key in pairs(inputs) do 
             if love.keyboard.isDown(key) then
                 if key == "right" then
                     right = true
@@ -1460,19 +1502,19 @@ function love.update(dt)
 end
 
 function love.draw()
-    if gameStates.loadoutChosen and gameStates.enemyLoadoutChosen then
+    if gameStates.loadoutChosen and gameStates.enemyLoadoutChosen then -- draws background tilemap
         tl:draw()
-    elseif gameStates.over then
+    elseif gameStates.over then --if game over draws something else
         love.graphics.setColor(cl.black)
         love.graphics.rectangle("fill", 0,0,game.width, game.height)
         love.graphics.setColor(cl.red)
         love.graphics.printf(gameStates.over,0, game.height/2 - 300, game.width, "center")
     end
 
-    world:emit("draw")
+    world:emit("draw") --every listener with draw runs
 
 
-    if gameStates.loadoutChosen and gameStates.enemyLoadoutChosen then
+    if gameStates.loadoutChosen and gameStates.enemyLoadoutChosen then -- draws textual ui info
 
         love.graphics.setFont(fonts.small)
         love.graphics.print("Cash: ".. game.player.cash, 10,10)
@@ -1482,14 +1524,17 @@ function love.draw()
     end
 end
 
-function love.mousereleased(x,y, button)
+--action for mouseclick
+function love.mousereleased(x,y, button) 
     world:emit("checkClick", x, y)
 end
 
+--action for mousemove
 function love.mousemoved(x,y)
     world:emit("highlight",x,y)
 end
 
+--action for keypress
 function love.keypressed(key, scancode, isrepeat)
     if key == "escape" then
         if gameStates.loadoutChosen then 
