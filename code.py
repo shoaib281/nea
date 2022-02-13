@@ -35,7 +35,6 @@ def validateUsername(args):
         if len(chosenUsername) > 1:
             if chosenUsername.isalpha():
                 textBox.destroy()
-                window.title(chosenUsername)
                 window.unbind("<Return>")
 
                 print(chosenUsername)
