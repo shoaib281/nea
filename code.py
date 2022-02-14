@@ -43,7 +43,7 @@ def validateUsername(args):
                 window.networking = networkingClass.networkingClass(chosenUsername, window)
                 window.networking.selfBroadcast()
                 window.inGame = False
-                threading.Thread(target=window.networking.loop).start()
+                threading.Thread(target=window.networking.broadcastListeningloop).start()
                 threading.Thread(target=window.networking.listeningLoop).start()
 
 #add user to player list

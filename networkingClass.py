@@ -126,6 +126,6 @@ class networkingClass():
             self.playerDict[player]["lastUpdate"] = int(time.time())
         
     #listens for broadcasts
-    def loop(self):
+    def broadcastListeningLoop(self):
         while True:
             self.newDataToDict(self.listeningBroadcastSocket.recvfrom(1024))
