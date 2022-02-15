@@ -129,7 +129,7 @@ class playerFrame():
 
             plrIndex = self.index
             
-            self.window.launcher.startGame(self.window.networking.playerDict[plrIndex]["address"],self.window.networking.playerDict[plrIndex]["listeningPort"] + 1)
+            self.window.launcher.startGame(self.window.networking.playerDict[plrIndex]["address"],self.window.networking.playerDict[plrIndex]["listeningPort"] + 10)
 
     #used if player leaves
     def destroyFrame(self):

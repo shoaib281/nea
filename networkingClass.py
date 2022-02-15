@@ -24,7 +24,7 @@ class networkingClass():
 
         self.myIp = socket.gethostbyname(socket.gethostname())
 
-        self.window.launcher = gameLauncher(self.myIp, self.listeningPort + 1, self.window)
+        self.window.launcher = gameLauncher(self.myIp, self.listeningPort + 10, self.window)
 
         print(self.myIp, self.listeningPort)
 
@@ -66,7 +66,7 @@ class networkingClass():
 
         if response == "Accept" and not self.window.inGame:
 
-            self.window.launcher.startGame(self.playerDict[index]["address"], self.playerDict[index]["listeningPort"] + 1)
+            self.window.launcher.startGame(self.playerDict[index]["address"], self.playerDict[index]["listeningPort"] + 10)
 
 
         sock.close()
