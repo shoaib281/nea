@@ -122,6 +122,7 @@ class playerFrame():
 
             connection = self.connection
             connection.send(bytes("Accept","utf-8"))
+            connection.close()
             self.connection = False
 
             self.removeAcceptReject()
