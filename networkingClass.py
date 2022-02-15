@@ -20,7 +20,6 @@ class networkingClass():
         
         self.listeningInviteSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.listeningPort = self.findNearestPort(9342)
-        
         self.listeningInviteSocket.listen()
 
         self.myIp = socket.gethostbyname(socket.gethostname())
