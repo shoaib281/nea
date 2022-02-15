@@ -126,7 +126,6 @@ class networkingClass():
                 "index": player,
                 "address":  ip,
                 "username": username,
-                "port": port,
                 "listeningPort": listeningPort,
                 "status": "active",
                 "invitedMe": False,
