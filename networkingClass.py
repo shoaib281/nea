@@ -128,9 +128,7 @@ class networkingClass():
                 "username": username,
                 "listeningPort": listeningPort,
                 "status": "active",
-                "invitedMe": False,
                 "socketObject": playerSocket,
-                "invitedByMe": False,
                 "lastUpdate": int(time.time())
             } 
 
