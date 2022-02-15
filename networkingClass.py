@@ -14,7 +14,7 @@ class networkingClass():
         self.broadcastTime = 1
         self.broadcastPort = 8734
 
-        self.listeningBroadcastSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        self.listeningBroadcastSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.listeningBroadcastSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, socket.SO_BROADCAST)
         self.listeningBroadcastSocket.bind(("0.0.0.0", self.broadcastPort))
         
