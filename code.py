@@ -3,7 +3,6 @@ from tkinter.constants import N, NW
 import tkinter.font
 import networkingClass
 import threading #multitasking
-import launch
 
 #creates window
 window = tkinter.Tk()
