@@ -18,9 +18,9 @@ class networkingClass():
         self.listeningBroadcastSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, socket.SO_BROADCAST)
         self.listeningBroadcastSocket.bind(("0.0.0.0", self.broadcastPort))
         
-        self.listeningPort = random.randint(9342, 9999)   
         self.listeningInviteSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.listeningInviteSocket.bind((socket.gethostname(), self.listeningPort))
+        self.listeningPort = self.findNearestPort(9342)
+        
         self.listeningInviteSocket.listen()
 
         self.myIp = socket.gethostbyname(socket.gethostname())
@@ -33,6 +33,21 @@ class networkingClass():
         
 
         self.playerDict = {}
+
+    def findNearestPort(self,basePort):
+        port = basePort
+
+        while True:
+            works = True
+            try:
+                self.listeningInviteSocket.bind((socket.gethostname(), port))
+            except:
+                works = False
+            if works:
+                print("done", port)
+                return port
+
+            port = port + 1
         
     #broadcasts itself and kills inactive players from UI
     def selfBroadcast(self):
