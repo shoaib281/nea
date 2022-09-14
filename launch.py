@@ -2,12 +2,10 @@ import os, subprocess
 import time
 import threading
 import psutil
+import platform
 
 class gameLauncher():
     def __init__(self, myIp, myPort, window):
-        currentDir = os.getcwd()
-        os.chdir(currentDir + "\Game")
-
         self.myIp = str(myIp)
         self.myPort = str(myPort)
         self.window = window
@@ -18,8 +16,11 @@ class gameLauncher():
 
         print("okay, launched...")
         #launches game
-        process = subprocess.Popen(["lv\love.exe", "Program", self.myIp, self.myPort, plrIp, str(plrPort)])
-        self.pid = process.pid #gets code of file launched
+        if platform.system() == "Linux":
+            process = subprocess.Popen(["love Game/Program " +  self.myIp + " " + str(self.myPort) + " " + plrIp + " " + str(plrPort)],shell=True)
+        else:
+            process = subprocess.Popen(["Game/lv/love.exe Game/Program " +  self.myIp + " " + str(self.myPort) + " " + plrIp + " " + str(plrPort)],shell=True)
+        self.process = psutil.Process(pid=process.pid)
 
         threading.Thread(target=self.processCheckLoop).start()
 
@@ -27,7 +28,8 @@ class gameLauncher():
     def processCheckLoop(self):
         while True:
             time.sleep(1)
-            
-            if not psutil.pid_exists(self.pid):
+            print("checking if in game", self.process.status()) 
+            if self.process.status() == "terminated" or self.process.status() == "zombie":
+                print("No longer in game")
                 self.window.inGame = False #informs game it doesnt
                 break        

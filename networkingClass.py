@@ -39,7 +39,7 @@ class networkingClass():
         while True:
             works = True
             try:
-                self.listeningInviteSocket.bind((socket.gethostname(), port))
+                self.listeningInviteSocket.bind((socket.gethostname()+".local", port))
             except:
                 works = False
             if works:

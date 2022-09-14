@@ -117,7 +117,6 @@ class playerFrame():
     #launches game when accept
     def acceptInvite(self): #server
         if not self.window.inGame:
-            print("yo")
 
             connection = self.connection
             connection.send(bytes("Accept","utf-8"))

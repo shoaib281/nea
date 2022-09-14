@@ -1439,6 +1439,9 @@ function love.update(dt)
     world:emit("update", dt) --every listener listening for update runs
 
     if networking then --handling received enemy actions
+		if not networking.talkSocketReady then
+			networking.talkSocketReady = networking.talkSocket:connect(networking.plrIp, networking.plrPort)
+		end
         if not networking.client then --try to initialise networking client
             networking.client = networking.listeningSocket:accept()
 
