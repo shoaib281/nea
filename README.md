@@ -32,3 +32,7 @@ Tell everyone who you want to play with your network name and password
 Get these people to join your network
 Do the above instruction set after this
 You may have to disable your firewall
+
+--- LINUX
+
+If on linux install love by doing "sudo apt install love"
