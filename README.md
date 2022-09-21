@@ -6,7 +6,8 @@ A fun multiplayer tower defense game that you can play with friends in the same 
 Download this repository
 Run code.py
 
-**If your network blocks this game do the following**
+If your network blocks this game do the following:
+
 Create a mobile hotspot choosing a network name and password
 Inform users the username and password to connect to the network
 
